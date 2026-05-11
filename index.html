@@ -745,6 +745,7 @@ async function openCardModal(id) {
   try {
     const card = await apiGet(`/cards/${id}`, `card:${id}`, 3600);
     renderCardModal(card);
+    loadCardTraderPrice(card);
   } catch (err) {
     $('#modalBody').innerHTML = `
       <div class="error-state">
@@ -825,16 +826,22 @@ function renderCardModal(card) {
     ` : ''}
 
     <div class="modal-section">
-      <h3>Market Pricing</h3>
-      ${renderPricing(card.pricing)}
+      <h3>Market Pricing — CardTrader 🌍 (JP cards)</h3>
+      <div id="cardtraderPricing">
+        <div class="loading-state" style="padding:20px">
+          <div class="spinner"></div>
+          <p>กำลังดึงราคาจาก CardTrader (ตลาดยุโรป)...</p>
+        </div>
+      </div>
     </div>
+
+    ${renderTcgdexPricing(card.pricing)}
   `;
 }
 
-function renderPricing(pricing) {
-  if (!pricing) return '<div class="pricing-empty">ไม่มีข้อมูลราคา</div>';
+function renderTcgdexPricing(pricing) {
+  if (!pricing) return '';
   const boxes = [];
-
   if (pricing.tcgplayer) {
     Object.entries(pricing.tcgplayer).forEach(([variant, data]) => {
       if (data && (data.market || data.low || data.mid)) {
@@ -861,11 +868,111 @@ function renderPricing(pricing) {
       }
     });
   }
+  if (boxes.length === 0) return '';
+  return `<div class="modal-section"><h3>TCGplayer / Cardmarket (EN/EU)</h3><div class="pricing-grid">${boxes.join('')}</div></div>`;
+}
 
-  if (boxes.length === 0) {
-    return '<div class="pricing-empty">การ์ดญี่ปุ่นมักไม่มีข้อมูลราคาใน TCGplayer/Cardmarket</div>';
+async function loadCardTraderPrice(card) {
+  const target = document.getElementById('cardtraderPricing');
+  if (!target) return;
+  const expCode = (card.set?.id || '').toLowerCase();
+  const collectorNumber = card.localId || '';
+  if (!expCode || !collectorNumber) {
+    target.innerHTML = '<div class="pricing-empty">ขาดข้อมูล set / collector number</div>';
+    return;
   }
-  return `<div class="pricing-grid">${boxes.join('')}</div>`;
+  const cacheKey = `ct:${expCode}:${collectorNumber}`;
+  let json = cacheGet(cacheKey);
+  if (!json) {
+    try {
+      const res = await fetch(`/api/price?expansion_code=${encodeURIComponent(expCode)}&collector_number=${encodeURIComponent(collectorNumber)}`);
+      json = await res.json();
+      if (!res.ok) {
+        target.innerHTML = `
+          <div class="pricing-empty">
+            <strong>${json.error === 'missing_credentials' ? '⚠ ยังไม่ได้ตั้ง CARDTRADER_TOKEN' : 'ดึงราคาไม่สำเร็จ'}</strong>
+            <p style="margin-top:6px;font-size:12px">${escapeHtml(json.message || `HTTP ${res.status}`)}</p>
+          </div>
+        `;
+        return;
+      }
+      cacheSet(cacheKey, json, 600);
+    } catch (err) {
+      target.innerHTML = `<div class="pricing-empty">เครือข่ายมีปัญหา: ${escapeHtml(err.message)}</div>`;
+      return;
+    }
+  }
+  renderCardTraderPricing(target, json);
+}
+
+function renderCardTraderPricing(target, data) {
+  const results = data.results || [];
+  const withListings = results.filter(r => r.stats && r.stats.count > 0);
+
+  if (withListings.length === 0) {
+    target.innerHTML = `
+      <div class="pricing-empty">
+        ยังไม่มี seller บน CardTrader ขายการ์ดใบนี้ (JP)
+        <p style="margin-top:6px;font-size:11px">ลองเช็คใน Yuyutei / Mercari JP สำหรับราคาตลาดญี่ปุ่นโดยตรง</p>
+      </div>
+    `;
+    return;
+  }
+
+  const html = withListings.map(r => {
+    const s = r.stats;
+    const boxes = `
+      <div class="pricing-grid" style="margin-top:8px">
+        <div class="price-box">
+          <div class="name">Lowest</div>
+          <div class="amt">${s.symbol}${s.lowest.toFixed(2)}</div>
+          <div class="src">${s.count} listings</div>
+        </div>
+        <div class="price-box">
+          <div class="name">Average</div>
+          <div class="amt">${s.symbol}${s.average.toFixed(2)}</div>
+          <div class="src">avg of ${s.count}</div>
+        </div>
+        <div class="price-box">
+          <div class="name">Median</div>
+          <div class="amt">${s.symbol}${s.median.toFixed(2)}</div>
+          <div class="src">${s.currency}</div>
+        </div>
+        <div class="price-box">
+          <div class="name">Highest</div>
+          <div class="amt">${s.symbol}${s.highest.toFixed(2)}</div>
+          <div class="src">${s.currency}</div>
+        </div>
+      </div>
+    `;
+    const sampleRows = (r.sample_listings || []).map(l => `
+      <tr style="border-top:1px solid var(--border)">
+        <td style="padding:6px 8px;color:var(--green);font-weight:700">${escapeHtml(l.formatted)}</td>
+        <td style="padding:6px 8px">${escapeHtml(l.condition)}</td>
+        <td style="padding:6px 8px;color:var(--text-dim)">${escapeHtml(l.country)} · ${escapeHtml(l.seller)}</td>
+      </tr>
+    `).join('');
+    return `
+      <div style="margin-bottom:14px">
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:4px">
+          ${escapeHtml(r.name_en)} ${r.version ? '· ' + escapeHtml(r.version) : ''}
+        </div>
+        ${boxes}
+        ${sampleRows ? `
+          <table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:12px">
+            <thead><tr style="color:var(--text-dim);text-align:left">
+              <th style="padding:6px 8px">Price</th>
+              <th style="padding:6px 8px">Condition</th>
+              <th style="padding:6px 8px">Seller</th>
+            </tr></thead>
+            <tbody>${sampleRows}</tbody>
+          </table>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+
+  target.innerHTML = html;
 }
 
 // =====================
