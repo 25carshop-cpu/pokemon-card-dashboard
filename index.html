@@ -205,7 +205,8 @@
   .sx-company-tab { background: transparent; color: var(--text-dim); border: none; border-bottom: 2px solid transparent; padding: 8px 14px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: color 0.15s, border-color 0.15s; }
   .sx-company-tab:hover { color: var(--text); }
   .sx-company-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-  .sx-company-tab[disabled] { color: #4a5170; cursor: default; }
+  .sx-company-tab.empty { color: #4a5170; }
+  .sx-company-tab.empty.active { color: var(--text-dim); border-bottom-color: var(--text-dim); }
   .sx-chart-wrap { background: var(--bg-dark); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
   .sx-chart { width: 100%; height: 200px; display: block; }
   .sx-chart .grid line { stroke: var(--border); stroke-width: 0.5; opacity: 0.5; }
@@ -2368,7 +2369,7 @@ function renderScrydexPricePanel() {
 
   const companyTabs = SCRYDEX_COMPANIES.map(c => {
     const has = !!data.byVariantCompany[variant]?.[c];
-    return `<button type="button" class="sx-company-tab ${c === company ? 'active' : ''}" data-sx-company="${escapeHtml(c)}" ${has ? '' : 'disabled'}>${escapeHtml(c)}</button>`;
+    return `<button type="button" class="sx-company-tab ${c === company ? 'active' : ''} ${has ? '' : 'empty'}" data-sx-company="${escapeHtml(c)}" title="${has ? '' : 'No data on Scrydex'}">${escapeHtml(c)}</button>`;
   }).join('');
 
   target.innerHTML = `
@@ -2393,7 +2394,7 @@ function renderScrydexPricePanel() {
       renderScrydexPricePanel();
     });
   });
-  target.querySelectorAll('[data-sx-company]:not([disabled])').forEach(btn => {
+  target.querySelectorAll('[data-sx-company]').forEach(btn => {
     btn.addEventListener('click', () => {
       sxState.company = btn.dataset.sxCompany;
       renderScrydexPricePanel();
@@ -2423,7 +2424,10 @@ function renderSxChart(seriesList) {
   const innerW = W - padL - padR;
   const innerH = H - padT - padB;
   const xStep = innerW / Math.max(1, dates.length - 1);
-  const fmtY = v => v < 10 ? `$${v.toFixed(2)}` : v < 1000 ? `$${v.toFixed(0)}` : `$${(v / 1000).toFixed(1)}k`;
+  // Pick Y-label decimals based on the range so labels don't all collapse to the same number
+  const range = yMax - yMin;
+  const yDecimals = range >= 100 ? 0 : range >= 10 ? 1 : 2;
+  const fmtY = v => v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v.toFixed(yDecimals)}`;
 
   const gridParts = [];
   for (let i = 0; i <= 4; i++) {
