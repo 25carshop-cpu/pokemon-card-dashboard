@@ -555,6 +555,126 @@
   .add-collection-form .btn-add:hover { filter: brightness(1.1); }
   .add-collection-form .btn-add.added { background: var(--text-dim); cursor: default; }
 
+  /* Series filter widget */
+  .filter-widget {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .filter-widget-header {
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+  }
+  .filter-widget-header h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .filter-toggle {
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text);
+    width: 26px; height: 26px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: inherit;
+    line-height: 1;
+  }
+  .filter-widget.collapsed .filter-widget-body { display: none; }
+  .filter-widget-body { padding: 12px; }
+  .series-search {
+    width: 100%;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px 8px 32px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 8px;
+    font-family: inherit;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239aa3c0' stroke-width='2'><circle cx='11' cy='11' r='8'/><path d='m21 21-4.35-4.35'/></svg>");
+    background-repeat: no-repeat;
+    background-position: 10px center;
+  }
+  .series-search:focus { outline: none; border-color: var(--accent); }
+  .series-list {
+    max-height: 360px;
+    overflow-y: auto;
+    margin: 0 -4px;
+  }
+  .series-list::-webkit-scrollbar { width: 6px; }
+  .series-list::-webkit-scrollbar-track { background: transparent; }
+  .series-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .series-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background .12s ease;
+  }
+  .series-row:hover { background: var(--bg-card-2); }
+  .series-row .series-name { flex: 1; font-size: 13px; color: var(--text); }
+  .series-row .series-count {
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    min-width: 28px;
+    text-align: center;
+  }
+  .series-row.selected .series-count {
+    background: rgba(255,203,5,0.15);
+    color: var(--accent);
+    border-color: rgba(255,203,5,0.4);
+  }
+  .series-row input[type="checkbox"] {
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-dark);
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .series-row input[type="checkbox"]:hover { border-color: var(--accent-2); }
+  .series-row input[type="checkbox"]:checked {
+    background: var(--accent-2);
+    border-color: var(--accent-2);
+  }
+  .series-row input[type="checkbox"]:checked::after {
+    content: '✓';
+    position: absolute;
+    color: white;
+    font-weight: 800;
+    font-size: 12px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .series-row.loading .series-name::after {
+    content: ' loading...';
+    color: var(--accent);
+    font-size: 11px;
+  }
+
   .footer {
     text-align: center;
     margin-top: 30px;
@@ -638,14 +758,29 @@
 </div>
 
 <div class="layout">
+  <div>
+    <div class="filter-widget" id="seriesFilter">
+      <div class="filter-widget-header" id="seriesFilterToggle">
+        <h3>Series</h3>
+        <button type="button" class="filter-toggle" id="seriesCollapseBtn" title="Collapse / Expand">−</button>
+      </div>
+      <div class="filter-widget-body">
+        <input type="text" class="series-search" id="seriesSearchInput" placeholder="Search series..." />
+        <div class="series-list" id="seriesList">
+          <div class="loading-state" style="padding:20px"><div class="spinner"></div><p>Loading series...</p></div>
+        </div>
+      </div>
+    </div>
+
   <div class="panel">
     <div class="panel-header">
-      <h2>Expansions (2020–2026)</h2>
+      <h2>Expansions</h2>
       <span class="count" id="expCount"></span>
     </div>
     <div class="expansion-list" id="expansionList">
       <div class="loading-state"><div class="spinner"></div><p>Loading expansions...</p></div>
     </div>
+  </div>
   </div>
 
   <div class="panel">
@@ -694,14 +829,33 @@
 // =====================
 const API_BASE = 'https://api.tcgdex.net/v2/en';
 const CARD_LANGUAGE = 'en'; // for CardTrader price filter
-// Series shown in sidebar (newest first). Each becomes a section header.
-const SERIES_TO_INCLUDE = [
-  { id: 'me',   label: 'Mega Evolution' },
-  { id: 'sv',   label: 'Scarlet & Violet' },
-  { id: 'swsh', label: 'Sword & Shield' },
+// Catalog of ALL Pokemon series available on TCGdex (newest first)
+const ALL_SERIES_CATALOG = [
+  { id: 'me',    label: 'Mega Evolution' },
+  { id: 'sv',    label: 'Scarlet & Violet' },
+  { id: 'tcgp',  label: 'Pokémon TCG Pocket' },
+  { id: 'swsh',  label: 'Sword & Shield' },
+  { id: 'sm',    label: 'Sun & Moon' },
+  { id: 'xy',    label: 'XY' },
+  { id: 'bw',    label: 'Black & White' },
+  { id: 'col',   label: 'Call of Legends' },
+  { id: 'hgss',  label: 'HeartGold & SoulSilver' },
+  { id: 'pl',    label: 'Platinum' },
+  { id: 'dp',    label: 'Diamond & Pearl' },
+  { id: 'tk',    label: 'Trainer Kits' },
+  { id: 'pop',   label: 'POP' },
+  { id: 'ex',    label: 'EX' },
+  { id: 'ecard', label: 'E-Card' },
+  { id: 'mc',    label: "McDonald's Collection" },
+  { id: 'lc',    label: 'Legendary Collection' },
+  { id: 'neo',   label: 'Neo' },
+  { id: 'gym',   label: 'Gym' },
+  { id: 'base',  label: 'Base' },
+  { id: 'misc',  label: 'Miscellaneous' },
 ];
-const YEAR_MIN = 2020;
-const YEAR_MAX = 2026;
+// Default series checked on first visit
+const DEFAULT_SERIES = ['me', 'sv', 'swsh'];
+const SELECTED_SERIES_KEY = 'selectedSeries:v1';
 
 // English type → energy CSS class + Japanese label
 const TYPE_INFO = {
@@ -813,6 +967,11 @@ let state = {
   view: 'browse', // 'browse' | 'collection'
   collection: [],
   collectionPrices: {}, // cardId -> { stats per grade, fetchedAt }
+  // Series filter
+  seriesCatalog: {},        // { id: { label, sets: [{id, name}] } } from /series/{id}
+  selectedSeries: new Set(),// which series are checked
+  loadedSeries: new Set(),  // which series have set details fetched
+  seriesSearch: '',
 };
 
 // =====================
@@ -879,6 +1038,101 @@ function updateCollectionTabBadge() {
 }
 
 // =====================
+// SERIES FILTER
+// =====================
+function loadSelectedSeries() {
+  try {
+    const raw = localStorage.getItem(SELECTED_SERIES_KEY);
+    if (raw) return new Set(JSON.parse(raw));
+  } catch {}
+  return new Set(DEFAULT_SERIES);
+}
+function saveSelectedSeries() {
+  try {
+    localStorage.setItem(SELECTED_SERIES_KEY, JSON.stringify([...state.selectedSeries]));
+  } catch {}
+}
+
+async function loadSeriesCatalog() {
+  // Fetch /series/{id} for ALL series in parallel — light, just gets {sets:[{id,name}]}
+  const results = await Promise.all(ALL_SERIES_CATALOG.map(async s => {
+    try {
+      const data = await apiGet(`/series/${s.id}`, `series:${s.id}`, 86400);
+      return { id: s.id, label: s.label, sets: data.sets || [] };
+    } catch {
+      return { id: s.id, label: s.label, sets: [] };
+    }
+  }));
+  for (const r of results) {
+    state.seriesCatalog[r.id] = { label: r.label, sets: r.sets };
+  }
+}
+
+async function loadSeriesDetail(seriesId) {
+  if (state.loadedSeries.has(seriesId)) return;
+  const cat = state.seriesCatalog[seriesId];
+  if (!cat) return;
+  // Fetch full /sets/{id} for each set in this series
+  const enriched = await Promise.all(cat.sets.map(async s => {
+    try {
+      const detail = await apiGet(`/sets/${s.id}`, `set:${s.id}`, 86400);
+      return { ...s, ...detail, serieName: cat.label, serieId: seriesId };
+    } catch { return null; }
+  }));
+  for (const e of enriched.filter(Boolean)) {
+    if (!state.expansions.find(x => x.id === e.id)) state.expansions.push(e);
+  }
+  state.loadedSeries.add(seriesId);
+}
+
+function renderSeriesFilter() {
+  const q = state.seriesSearch.toLowerCase();
+  // Sort by total set count descending (matches the screenshot pattern)
+  const list = Object.entries(state.seriesCatalog)
+    .map(([id, v]) => ({ id, label: v.label, count: v.sets.length }))
+    .filter(s => !q || s.label.toLowerCase().includes(q))
+    .sort((a, b) => b.count - a.count);
+
+  if (list.length === 0) {
+    $('#seriesList').innerHTML = '<div style="padding:14px;text-align:center;color:var(--text-dim);font-size:12px">No series match search</div>';
+    return;
+  }
+
+  $('#seriesList').innerHTML = list.map(s => {
+    const checked = state.selectedSeries.has(s.id);
+    return `
+      <label class="series-row ${checked ? 'selected' : ''}" data-series="${escapeHtml(s.id)}">
+        <input type="checkbox" ${checked ? 'checked' : ''} data-series="${escapeHtml(s.id)}">
+        <span class="series-name">${escapeHtml(s.label)}</span>
+        <span class="series-count">${s.count}</span>
+      </label>
+    `;
+  }).join('');
+
+  $('#seriesList').querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', () => handleSeriesToggle(cb.dataset.series, cb.checked));
+  });
+}
+
+async function handleSeriesToggle(seriesId, checked) {
+  if (checked) state.selectedSeries.add(seriesId);
+  else state.selectedSeries.delete(seriesId);
+  saveSelectedSeries();
+  renderSeriesFilter();
+
+  if (checked && !state.loadedSeries.has(seriesId)) {
+    // Mark row as loading
+    const row = $('#seriesList').querySelector(`label[data-series="${seriesId}"]`);
+    if (row) row.classList.add('loading');
+    await loadSeriesDetail(seriesId);
+    if (row) row.classList.remove('loading');
+  }
+
+  renderStats();
+  renderExpansionList();
+}
+
+// =====================
 // VIEW SWITCHER
 // =====================
 function setView(view) {
@@ -905,7 +1159,7 @@ function renderStats() {
     <div class="stat">
       <div class="stat-label">Expansions</div>
       <div class="stat-value">${totalExp}</div>
-      <div class="stat-meta">${YEAR_MIN}–${YEAR_MAX} · English</div>
+      <div class="stat-meta">${state.selectedSeries.size} series · English</div>
     </div>
     <div class="stat">
       <div class="stat-label">Total Cards</div>
@@ -940,14 +1194,22 @@ function renderExpansionList() {
     return;
   }
 
-  // Group by series, preserving SERIES_TO_INCLUDE order
-  const groups = SERIES_TO_INCLUDE.map(s => ({
-    id: s.id,
-    label: s.label,
-    sets: filtered
-      .filter(e => e.serieId === s.id)
-      .sort((a, b) => String(b.releaseDate || '').localeCompare(String(a.releaseDate || ''))),
-  })).filter(g => g.sets.length > 0);
+  // Group by series — only show series that are checked in the filter
+  const groups = ALL_SERIES_CATALOG
+    .filter(s => state.selectedSeries.has(s.id))
+    .map(s => ({
+      id: s.id,
+      label: s.label,
+      sets: filtered
+        .filter(e => e.serieId === s.id)
+        .sort((a, b) => String(b.releaseDate || '').localeCompare(String(a.releaseDate || ''))),
+    }))
+    .filter(g => g.sets.length > 0);
+
+  if (groups.length === 0) {
+    $('#expansionList').innerHTML = '<div class="empty-state"><div class="icon">☝️</div><h3>Select a series</h3><p>Check one or more series in the filter above</p></div>';
+    return;
+  }
 
   $('#expansionList').innerHTML = groups.map(group => `
     <div class="series-section">
@@ -1760,6 +2022,18 @@ document.querySelectorAll('.view-tab').forEach(tab => {
   tab.addEventListener('click', () => setView(tab.dataset.view));
 });
 
+// Series filter widget
+$('#seriesSearchInput').addEventListener('input', e => {
+  state.seriesSearch = e.target.value;
+  renderSeriesFilter();
+});
+$('#seriesFilterToggle').addEventListener('click', e => {
+  if (e.target.closest('input')) return; // ignore checkbox/search clicks
+  const widget = $('#seriesFilter');
+  widget.classList.toggle('collapsed');
+  $('#seriesCollapseBtn').textContent = widget.classList.contains('collapsed') ? '+' : '−';
+});
+
 // =====================
 // INIT
 // =====================
@@ -1768,51 +2042,51 @@ async function init() {
   $('#liveBadge').innerHTML = '<span class="dot"></span>Connecting to TCGdex...';
 
   try {
-    // Load each series in parallel, gather sets with releaseDate
-    const allSets = [];
-    let totalSets = 0, doneSets = 0;
+    // Step 1: Load all series catalogs (light) so the filter widget renders with counts
+    $('#expansionList').innerHTML = `
+      <div class="loading-state"><div class="spinner"></div><p>Loading series catalog...</p></div>
+    `;
+    await loadSeriesCatalog();
+    state.selectedSeries = loadSelectedSeries();
+    renderSeriesFilter();
+
+    // Step 2: Load set details only for the currently-selected series
+    const selected = [...state.selectedSeries];
+    const totalSets = selected.reduce((s, id) => s + (state.seriesCatalog[id]?.sets?.length || 0), 0);
+    let done = 0;
     const updateProgress = () => {
-      const pct = totalSets > 0 ? Math.round((doneSets / totalSets) * 100) : 0;
+      const pct = totalSets > 0 ? Math.round((done / totalSets) * 100) : 0;
       $('#expansionList').innerHTML = `
         <div class="loading-state">
           <div class="spinner"></div>
-          <h3>Loading expansions</h3>
-          <p>${doneSets} / ${totalSets} (${pct}%)</p>
+          <h3>Loading sets</h3>
+          <p>${done} / ${totalSets} (${pct}%)</p>
           <div class="progress-bar"><div style="width:${pct}%"></div></div>
         </div>
       `;
     };
-
-    // First pre-fetch series to know totals
-    const seriesData = await Promise.all(
-      SERIES_TO_INCLUDE.map(s => apiGet(`/series/${s.id}`, `series:${s.id}`, 86400)
-        .then(data => ({ ...data, configId: s.id, configLabel: s.label })))
-    );
-    totalSets = seriesData.reduce((s, sr) => s + (sr.sets?.length || 0), 0);
     updateProgress();
 
-    // Fetch each set's detail
-    for (const sr of seriesData) {
-      const enriched = await Promise.all((sr.sets || []).map(async (s) => {
+    await Promise.all(selected.map(async seriesId => {
+      const cat = state.seriesCatalog[seriesId];
+      if (!cat) return;
+      const enriched = await Promise.all(cat.sets.map(async s => {
         try {
           const detail = await apiGet(`/sets/${s.id}`, `set:${s.id}`, 86400);
-          doneSets++;
+          done++;
           updateProgress();
-          return { ...s, ...detail, serieName: sr.configLabel, serieId: sr.configId };
+          return { ...s, ...detail, serieName: cat.label, serieId: seriesId };
         } catch {
-          doneSets++;
+          done++;
           updateProgress();
           return null;
         }
       }));
-      allSets.push(...enriched.filter(Boolean));
-    }
-
-    // Filter by year 2023-2026
-    state.expansions = allSets.filter(e => {
-      const y = getYear(e.releaseDate);
-      return y >= YEAR_MIN && y <= YEAR_MAX;
-    });
+      for (const e of enriched.filter(Boolean)) {
+        if (!state.expansions.find(x => x.id === e.id)) state.expansions.push(e);
+      }
+      state.loadedSeries.add(seriesId);
+    }));
 
     $('#liveBadge').className = 'badge';
     $('#liveBadge').innerHTML = '<span class="dot"></span>Live · TCGdex';
