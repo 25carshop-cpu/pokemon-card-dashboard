@@ -989,6 +989,20 @@ const PRICING_FILTERS = [
   { id: 'ace10',   label: 'ACE 10',  test: l => l.grading?.company === 'ACE' && l.grading?.grade === 10 },
 ];
 
+// Tier comparison rows (top-of-section table)
+const GRADE_TIERS = [
+  { id: 'raw',   label: 'Raw',     color: '#9aa3c0', test: l => !l.graded && !l.grading },
+  { id: 'psa10', label: 'PSA 10',  color: '#fbbf24', test: l => l.grading?.company === 'PSA' && l.grading?.grade === 10 },
+  { id: 'psa9',  label: 'PSA 9',   color: '#facc15', test: l => l.grading?.company === 'PSA' && l.grading?.grade === 9 },
+  { id: 'psa8',  label: 'PSA 8',   color: '#eab308', test: l => l.grading?.company === 'PSA' && l.grading?.grade === 8 },
+  { id: 'bgs10', label: 'BGS 10',  color: '#fb923c', test: l => l.grading?.company === 'BGS' && l.grading?.grade === 10 },
+  { id: 'bgs95', label: 'BGS 9.5', color: '#f97316', test: l => l.grading?.company === 'BGS' && l.grading?.grade === 9.5 },
+  { id: 'cgc10', label: 'CGC 10',  color: '#a78bfa', test: l => l.grading?.company === 'CGC' && l.grading?.grade === 10 },
+  { id: 'ace10', label: 'ACE 10',  color: '#34d399', test: l => l.grading?.company === 'ACE' && l.grading?.grade === 10 },
+  { id: 'sgc10', label: 'SGC 10',  color: '#60a5fa', test: l => l.grading?.company === 'SGC' && l.grading?.grade === 10 },
+  { id: 'graad10', label: 'GRAAD 10', color: '#f472b6', test: l => l.grading?.company === 'GRAAD' && l.grading?.grade === 10 },
+];
+
 function computeStats(listings) {
   if (!listings || !listings.length) return null;
   const sorted = listings.slice().sort((a, b) => (a.price_cents || 0) - (b.price_cents || 0));
@@ -1005,6 +1019,62 @@ function computeStats(listings) {
     median: cents[Math.floor(cents.length / 2)] / 100,
     highest: cents[cents.length - 1] / 100,
   };
+}
+
+function renderGradeComparisonTable(allListings) {
+  const rawStats = computeStats(allListings.filter(l => !l.graded && !l.grading));
+  const tiers = GRADE_TIERS.map(tier => {
+    const matched = allListings.filter(tier.test);
+    return matched.length > 0 ? { ...tier, stats: computeStats(matched) } : null;
+  }).filter(Boolean);
+
+  if (tiers.length === 0) return '';
+
+  const fmt = (s, n) => s && Number.isFinite(n) ? `${s.symbol}${n.toFixed(2)}` : '—';
+  const multiplier = (a, b) => (a && b && b > 0) ? `${(a / b).toFixed(1)}×` : '';
+
+  const rows = tiers.map(t => {
+    const s = t.stats;
+    const mult = (rawStats && t.id !== 'raw' && rawStats.average > 0)
+      ? multiplier(s.average, rawStats.average) : '';
+    return `
+      <tr style="border-top:1px solid var(--border)">
+        <td style="padding:8px 10px">
+          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${t.color};margin-right:8px;vertical-align:middle"></span>
+          <strong>${escapeHtml(t.label)}</strong>
+          ${mult ? `<span style="color:${t.color};font-size:11px;margin-left:6px;font-weight:700">${mult} raw</span>` : ''}
+        </td>
+        <td style="padding:8px 10px;text-align:center;color:var(--text-dim)">${s.count}</td>
+        <td style="padding:8px 10px;text-align:right;color:var(--green);font-weight:700">${fmt(s, s.lowest)}</td>
+        <td style="padding:8px 10px;text-align:right">${fmt(s, s.average)}</td>
+        <td style="padding:8px 10px;text-align:right">${fmt(s, s.median)}</td>
+        <td style="padding:8px 10px;text-align:right;color:var(--orange)">${fmt(s, s.highest)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <div style="margin-bottom:16px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+      <div style="padding:10px 14px;background:rgba(255,203,5,0.08);border-bottom:1px solid var(--border);font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px">
+        🏆 Grade Comparison
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:540px">
+          <thead>
+            <tr style="color:var(--text-dim);text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">
+              <th style="padding:8px 10px">Grade</th>
+              <th style="padding:8px 10px;text-align:center">Listings</th>
+              <th style="padding:8px 10px;text-align:right">Lowest</th>
+              <th style="padding:8px 10px;text-align:right">Avg</th>
+              <th style="padding:8px 10px;text-align:right">Median</th>
+              <th style="padding:8px 10px;text-align:right">Highest</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
 }
 
 function renderCardTraderPricing(target, data) {
@@ -1032,6 +1102,8 @@ function renderPricingWithFilter(target) {
   const filtersAvailable = PRICING_FILTERS.filter(f =>
     f.id === 'all' || allListings.some(f.test)
   );
+
+  const comparisonTable = renderGradeComparisonTable(allListings);
 
   const filterBar = `
     <div class="filter-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
@@ -1122,7 +1194,7 @@ function renderPricingWithFilter(target) {
     `;
   }).join('');
 
-  target.innerHTML = filterBar + html;
+  target.innerHTML = comparisonTable + filterBar + html;
 
   // Wire up filter chip clicks
   target.querySelectorAll('.filter-chip').forEach(btn => {
