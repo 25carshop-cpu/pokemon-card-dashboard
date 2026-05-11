@@ -41,11 +41,15 @@ pokemon-card-dashboard/
 2. ไปที่ [vercel.com/new](https://vercel.com/new) → Import repo
 3. ก่อนกด Deploy → **Settings → Environment Variables** ใส่:
 
-   | Name | Value |
-   |---|---|
-   | `CARDTRADER_TOKEN` | (JWT token จาก CardTrader) |
+   | Name | Value | Required |
+   |---|---|---|
+   | `CARDTRADER_TOKEN` | (JWT token จาก CardTrader) | ✅ pricing |
+   | `EBAY_APP_ID` | App ID (Production keyset) จาก [developer.ebay.com](https://developer.ebay.com) | ⚪ Watchlist eBay column |
+   | `EBAY_CERT_ID` | Cert ID จาก keyset เดียวกัน | ⚪ Watchlist eBay column |
 
 > **📷 Scan Card:** ใช้ Tesseract.js ทำงานในเบราว์เซอร์ ไม่ต้องตั้งค่า key เพิ่ม
+>
+> **eBay setup (~10 min):** 1) Sign in [developer.ebay.com](https://developer.ebay.com) (use any eBay account) 2) Application Keys → กด **Create a keyset** ใต้ "Production" 3) Accept TOS 4) Copy **App ID** + **Cert ID** ใส่ใน Vercel env. **ฟรี 5,000 calls/day, ไม่ต้องผูกบัตร**
 
 4. กด Deploy
 5. ถ้าใส่ env หลัง deploy แล้ว → กด **Redeploy** เพื่อให้มีผล
@@ -68,7 +72,8 @@ npx vercel dev
 
 | Endpoint | คำอธิบาย | Cache |
 |---|---|---|
-| `GET /api/price?expansion_code=sv10&collector_number=039` | ดึงราคาจาก CardTrader | 10 นาที |
+| `GET /api/price?expansion_code=sv10&collector_number=039&language=en` | ดึงราคาจาก CardTrader | 10 นาที |
+| `GET /api/ebay?q=Pikachu+sv8+062` | ดึง active US listings จาก eBay (Watchlist) | 10 นาที |
 
 **Response shape:**
 ```json

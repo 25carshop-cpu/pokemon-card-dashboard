@@ -2641,8 +2641,9 @@ function renderCollectionTable(loading) {
 // =====================
 const WATCHLIST_GRADES = ['Any', 'PSA 9', 'PSA 10', 'BGS 9.5', 'BGS 10'];
 const WATCHLIST_LANGS = [
-  { code: 'en', label: 'EN (US/EU)', flag: '🇺🇸' },
-  { code: 'jp', label: 'JP', flag: '🇯🇵' },
+  { code: 'en', label: 'CardTrader EN (EU)', flag: '🇪🇺', source: 'cardtrader' },
+  { code: 'jp', label: 'CardTrader JP', flag: '🇯🇵', source: 'cardtrader' },
+  { code: 'ebay', label: 'eBay (US active)', flag: '🇺🇸', source: 'ebay' },
 ];
 // Test functions for the watchlist grade rows ('Any' = all listings)
 const WATCHLIST_GRADE_TESTS = {
@@ -2656,13 +2657,12 @@ const WATCHLIST_GRADE_TESTS = {
 async function fetchWatchlistPrices(item) {
   const setCode = (item.setId || '').toLowerCase();
   const cn = item.localId || '';
-  if (!setCode || !cn) return { en: null, jp: null };
-
-  const cacheKey = `wl:${setCode}:${cn}`;
+  const cacheKey = `wl:${setCode}:${cn}:v2`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
-  const fetchOne = async (lang) => {
+  const fetchCardTrader = async (lang) => {
+    if (!setCode || !cn) return null;
     try {
       const params = new URLSearchParams({
         expansion_code: setCode,
@@ -2674,10 +2674,54 @@ async function fetchWatchlistPrices(item) {
       return r.ok ? r.json() : null;
     } catch { return null; }
   };
-  const [en, jp] = await Promise.all([fetchOne('en'), fetchOne('jp')]);
-  const result = { en, jp };
+
+  const fetchEbay = async () => {
+    try {
+      const q = [item.name, cn].filter(Boolean).join(' ');
+      const r = await fetch(`/api/ebay?q=${encodeURIComponent(q)}`);
+      return r.ok ? r.json() : null;
+    } catch { return null; }
+  };
+
+  const [en, jp, ebay] = await Promise.all([
+    fetchCardTrader('en'),
+    fetchCardTrader('jp'),
+    fetchEbay(),
+  ]);
+  const result = { en, jp, ebay };
   cacheSet(cacheKey, result, 600);
   return result;
+}
+
+const EBAY_GRADE_PATTERNS = {
+  'PSA 9':   /\bPSA[\s.]*9(?!\.\d|\d)\b/i,
+  'PSA 10':  /\bPSA[\s.]*(?:GEM[\s.]*MT[\s.]*)?10\b/i,
+  'BGS 9.5': /\bBGS[\s.]*9\.5\b/i,
+  'BGS 10':  /\bBGS[\s.]*(?:BLACK[\s.]*LABEL[\s.]*)?10\b/i,
+};
+
+function ebayItemsForGrade(items, grade) {
+  if (!items) return [];
+  if (grade === 'Any') return items;
+  const re = EBAY_GRADE_PATTERNS[grade];
+  if (!re) return [];
+  return items.filter(it => re.test(it.title || ''));
+}
+
+function statsFromEbayItems(items) {
+  if (!items?.length) return null;
+  const prices = items.map(i => i.price).filter(p => Number.isFinite(p) && p > 0).sort((a, b) => a - b);
+  if (!prices.length) return null;
+  const sum = prices.reduce((a, b) => a + b, 0);
+  return {
+    currency: items[0].currency || 'USD',
+    symbol: items[0].currency === 'EUR' ? '€' : '$',
+    count: prices.length,
+    lowest: prices[0],
+    average: sum / prices.length,
+    median: prices[Math.floor(prices.length / 2)],
+    highest: prices[prices.length - 1],
+  };
 }
 
 function statsForGradeLang(json, grade) {
@@ -2744,28 +2788,43 @@ function renderWatchlistCard(item, idx, prices) {
   const links = buildWatchlistLinks(item);
   const imgUrlSrc = item.image ? `${item.image}/low.png` : '';
 
-  // Per-language listing summary (helps explain why cells are empty)
+  // Per-source listing summary
   const summary = WATCHLIST_LANGS.map(lang => {
     if (!prices) return `${lang.flag} <span style="color:var(--text-dim)">checking…</span>`;
     const json = prices[lang.code];
+    if (lang.source === 'ebay') {
+      if (json?.error === 'missing_credentials') return `${lang.flag} <span style="color:var(--orange)">eBay key not set</span>`;
+      const cnt = json?.items?.length || 0;
+      if (cnt === 0) return `${lang.flag} <strong style="color:var(--orange)">0 eBay items</strong>`;
+      return `${lang.flag} <strong>${cnt}</strong> eBay items`;
+    }
     const total = totalListings(json);
-    const error = json?.error;
-    if (error === 'expansion_not_found') return `${lang.flag} <span style="color:var(--text-dim)">set not on CardTrader</span>`;
+    if (json?.error === 'expansion_not_found') return `${lang.flag} <span style="color:var(--text-dim)">set not on CardTrader</span>`;
     if (total === 0) return `${lang.flag} <strong style="color:var(--orange)">0 listings</strong>`;
     const all = json.results.flatMap(r => r.listings || []);
     const graded = all.filter(l => l.grading || l.graded).length;
     return `${lang.flag} <strong>${total}</strong> listings <span style="color:var(--text-dim)">· ${graded} graded</span>`;
   }).join(' &nbsp;·&nbsp; ');
 
-  // Detect "no data anywhere" — show simpler card with verification links front and center
-  const hasAnyData = prices && WATCHLIST_LANGS.some(lang => totalListings(prices[lang.code]) > 0);
+  // Detect "no data anywhere" across all 3 sources
+  const hasAnyData = prices && WATCHLIST_LANGS.some(lang => {
+    const json = prices[lang.code];
+    if (lang.source === 'ebay') return (json?.items?.length || 0) > 0;
+    return totalListings(json) > 0;
+  });
   const noDataYet = prices && !hasAnyData;
 
   const priceCells = WATCHLIST_GRADES.map(grade => {
     const cells = WATCHLIST_LANGS.map(lang => {
       if (!prices) return `<td class="price-cell"><span class="loader">…</span></td>`;
       const json = prices[lang.code];
-      const stats = json ? statsForGradeLang(json, grade) : null;
+      let stats = null;
+      if (lang.source === 'ebay') {
+        const matched = ebayItemsForGrade(json?.items, grade);
+        stats = statsFromEbayItems(matched);
+      } else {
+        stats = json ? statsForGradeLang(json, grade) : null;
+      }
       if (!stats) return `<td class="price-cell empty">—</td>`;
       return `<td class="price-cell">
         <strong>${stats.symbol}${stats.lowest.toFixed(2)}</strong>
