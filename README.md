@@ -35,25 +35,17 @@ pokemon-card-dashboard/
 
 > ⚠️ Token นี้เปรียบเสมือนรหัสผ่าน — เก็บไว้ใน Vercel Environment Variables เท่านั้น **ห้ามใส่ในโค้ด**
 
-### 1.5. (ทางเลือก) ขอ Google Cloud Vision API Key — สำหรับ "📷 Scan Card"
-
-1. ไปที่ https://console.cloud.google.com → สร้าง project ใหม่ (ฟรี)
-2. เปิด API: https://console.cloud.google.com/apis/library/vision.googleapis.com → กด **Enable**
-3. ไปที่ https://console.cloud.google.com/apis/credentials → **Create credentials → API key**
-4. Copy key (ขึ้นต้น `AIza...`)
-5. (แนะนำ) จำกัดสิทธิ์ key ให้ใช้ได้แค่ Vision API
-6. **Free tier:** 1,000 TEXT_DETECTION calls / เดือน (เพียงพอใช้ส่วนตัว)
-
 ### 2. Deploy บน Vercel
 
 1. Push repo ขึ้น GitHub
 2. ไปที่ [vercel.com/new](https://vercel.com/new) → Import repo
 3. ก่อนกด Deploy → **Settings → Environment Variables** ใส่:
 
-   | Name | Value | Required |
-   |---|---|---|
-   | `CARDTRADER_TOKEN` | (JWT token จาก CardTrader) | ✅ pricing |
-   | `GOOGLE_VISION_API_KEY` | (Google Cloud API key) | ⚪ optional, สำหรับ scan |
+   | Name | Value |
+   |---|---|
+   | `CARDTRADER_TOKEN` | (JWT token จาก CardTrader) |
+
+> **📷 Scan Card:** ใช้ Tesseract.js ทำงานในเบราว์เซอร์ ไม่ต้องตั้งค่า key เพิ่ม
 
 4. กด Deploy
 5. ถ้าใส่ env หลัง deploy แล้ว → กด **Redeploy** เพื่อให้มีผล
@@ -77,7 +69,6 @@ npx vercel dev
 | Endpoint | คำอธิบาย | Cache |
 |---|---|---|
 | `GET /api/price?expansion_code=sv10&collector_number=039` | ดึงราคาจาก CardTrader | 10 นาที |
-| `POST /api/ocr` (body: `{ image: <base64> }`) | OCR ภาพการ์ด via Google Vision → ใช้ใน "📷 Scan Card to Add" | — |
 
 **Response shape:**
 ```json

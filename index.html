@@ -2504,41 +2504,60 @@ async function handleScanFile(file) {
   }
 }
 
+let tesseractScriptLoaded = false;
+async function ensureTesseract() {
+  if (tesseractScriptLoaded || window.Tesseract) {
+    tesseractScriptLoaded = true;
+    return;
+  }
+  $('#scanStatus').style.display = '';
+  $('#scanStatus').innerHTML = `<span class="spinner" style="display:inline-block;width:14px;height:14px;border-width:2px"></span> Loading OCR engine (~5MB, first time only)...`;
+  await new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js';
+    script.async = true;
+    script.onload = () => { tesseractScriptLoaded = true; resolve(); };
+    script.onerror = () => reject(new Error('Failed to load Tesseract.js from CDN'));
+    document.head.appendChild(script);
+  });
+}
+
 async function runScan() {
   if (!scanState.imageDataUrl) return;
   $('#scanRunBtn').disabled = true;
-  $('#scanStatus').innerHTML = '<span class="spinner" style="display:inline-block;width:14px;height:14px;border-width:2px"></span> Sending to Google Vision OCR...';
   $('#scanResults').innerHTML = '';
 
   try {
-    const res = await fetch('/api/ocr', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: scanState.imageDataUrl }),
-    });
-    const json = await res.json();
-    if (!res.ok) {
-      const isMissingKey = json.error === 'missing_credentials';
-      $('#scanStatus').innerHTML = `
-        <span style="color:var(--orange)">${isMissingKey ? '⚠ GOOGLE_VISION_API_KEY not set' : 'OCR failed'}</span>
-        <div style="font-size:11px;color:var(--text-dim);margin-top:4px">${escapeHtml(json.message || `HTTP ${res.status}`)}</div>
-      `;
-      $('#scanRunBtn').disabled = false;
-      return;
-    }
+    await ensureTesseract();
 
-    const fullText = json.fullText || '';
-    const candidates = extractNameCandidates(fullText, json.words || []);
+    const result = await Tesseract.recognize(scanState.imageDataUrl, 'eng', {
+      logger: m => {
+        let label = '';
+        if (m.status === 'recognizing text') {
+          label = `OCR running... ${Math.round((m.progress || 0) * 100)}%`;
+        } else if (m.status) {
+          label = `${m.status}${m.progress != null ? ' ' + Math.round(m.progress * 100) + '%' : ''}...`;
+        }
+        if (label) {
+          $('#scanStatus').innerHTML = `<span class="spinner" style="display:inline-block;width:14px;height:14px;border-width:2px"></span> ${escapeHtml(label)}`;
+        }
+      },
+    });
+
+    const fullText = result?.data?.text || '';
+    const words = (result?.data?.words || []).map(w => w.text).filter(Boolean);
+
+    const candidates = extractNameCandidates(fullText, words);
     $('#scanStatus').innerHTML = `
-      <div>Found ${candidates.length} candidate name(s). Searching cards...</div>
+      <div>Found ${candidates.length} candidate name(s). Searching TCGdex...</div>
       <div class="scan-text-box">${escapeHtml(fullText.slice(0, 400))}${fullText.length > 400 ? '...' : ''}</div>
     `;
 
     const matches = await searchMatchingCards(candidates);
     renderScanResults(matches, candidates);
-    $('#scanRunBtn').disabled = false;
   } catch (err) {
-    $('#scanStatus').innerHTML = `<span style="color:var(--red)">Network error: ${escapeHtml(err.message)}</span>`;
+    $('#scanStatus').innerHTML = `<span style="color:var(--red)">OCR failed: ${escapeHtml(err.message)}</span>`;
+  } finally {
     $('#scanRunBtn').disabled = false;
   }
 }
