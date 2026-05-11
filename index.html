@@ -180,6 +180,18 @@
     text-transform: uppercase;
   }
   .series-section:first-child .series-header { border-top: none; }
+  .series-section-flash { animation: seriesFlash 1.6s ease-out; }
+  @keyframes seriesFlash {
+    0%   { background: rgba(255,203,5,0.35); }
+    100% { background: transparent; }
+  }
+  .series-link {
+    color: var(--accent-2);
+    cursor: pointer;
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .series-link:hover { color: var(--accent); text-decoration: underline; }
   .expansion-list::-webkit-scrollbar { width: 6px; }
   .expansion-list::-webkit-scrollbar-track { background: var(--bg-dark); }
   .expansion-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
@@ -1743,9 +1755,20 @@ function setView(view) {
 function renderStats() {
   const totalExp = state.expansions.length;
   const totalCards = state.expansions.reduce((s, e) => s + (e.cardCount?.official || 0), 0);
-  const seriesSet = new Set(state.expansions.map(e => e.serieName).filter(Boolean));
+  // Unique series with both id and name preserved (in expansion order)
+  const seriesMap = new Map();
+  for (const e of state.expansions) {
+    if (e.serieId && !seriesMap.has(e.serieId)) {
+      seriesMap.set(e.serieId, e.serieName || e.serieId);
+    }
+  }
+  const seriesList = [...seriesMap.entries()].map(([id, name]) => ({ id, name }));
   const sorted = [...state.expansions].sort((a, b) => String(b.releaseDate || '').localeCompare(String(a.releaseDate || '')));
   const latest = sorted[0];
+
+  const seriesLinks = seriesList.length
+    ? seriesList.map(s => `<a href="#" class="series-link" data-series-id="${escapeHtml(s.id)}">${escapeHtml(s.name)}</a>`).join(' · ')
+    : '-';
 
   $('#statsContainer').innerHTML = `
     <div class="stat">
@@ -1760,8 +1783,8 @@ function renderStats() {
     </div>
     <div class="stat">
       <div class="stat-label">Series</div>
-      <div class="stat-value">${seriesSet.size}</div>
-      <div class="stat-meta">${[...seriesSet].slice(0, 2).join(' · ') || '-'}</div>
+      <div class="stat-value">${seriesList.length}</div>
+      <div class="stat-meta">${seriesLinks}</div>
     </div>
     <div class="stat">
       <div class="stat-label">Latest Release</div>
@@ -1769,6 +1792,25 @@ function renderStats() {
       <div class="stat-meta">${latest?.releaseDate || '-'}</div>
     </div>
   `;
+
+  $('#statsContainer').querySelectorAll('.series-link').forEach(a => {
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      jumpToSeries(a.dataset.seriesId);
+    });
+  });
+}
+
+function jumpToSeries(seriesId) {
+  const target = document.getElementById(`series-section-${cssId(seriesId)}`);
+  if (!target) return;
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  target.classList.add('series-section-flash');
+  setTimeout(() => target.classList.remove('series-section-flash'), 1600);
+}
+
+function cssId(s) {
+  return String(s).replace(/[^a-zA-Z0-9_-]/g, '_');
 }
 
 function renderExpansionList() {
@@ -1818,7 +1860,7 @@ function renderExpansionList() {
   }
 
   $('#expansionList').innerHTML = groups.map(group => `
-    <div class="series-section">
+    <div class="series-section" id="series-section-${cssId(group.id)}">
       <div class="series-header">${escapeHtml(group.label.toUpperCase())}</div>
       ${group.sets.map(e => {
         const logoUrl = e.logo ? `${e.logo}.png` : (e.symbol ? `${e.symbol}.png` : null);
