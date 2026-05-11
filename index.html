@@ -1793,6 +1793,19 @@ function renderFiltersPanel() {
   const facets = buildFacets(detailed);
 
   if (detailed.length === 0) {
+    const exp = state.expansions.find(e => e.id === state.selectedExpansion);
+    if (exp?.source === 'scrydex') {
+      $('#facetsContainer').innerHTML = `
+        <div class="facet-loading" style="text-align:left;line-height:1.5">
+          <strong style="color:var(--text)">Filters unavailable</strong>
+          <p style="font-size:11px;color:var(--text-dim);margin-top:6px">
+            This set comes from Scrydex — per-card metadata (rarity, type, illustrator) isn't fetched yet.
+            Use the search bar above the grid instead.
+          </p>
+        </div>
+      `;
+      return;
+    }
     $('#facetsContainer').innerHTML = `
       <div class="facet-loading">
         <span class="spinner" style="display:inline-block;width:14px;height:14px;border-width:2px;vertical-align:middle;margin-right:6px"></span>
