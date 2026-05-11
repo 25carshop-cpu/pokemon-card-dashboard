@@ -192,6 +192,35 @@
     transition: color 0.15s;
   }
   .series-link:hover { color: var(--accent); text-decoration: underline; }
+
+  /* Scrydex-style price panel */
+  .sx-price-panel { background: var(--bg-card-2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .sx-price-panel .sx-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+  .sx-price-panel .sx-title { font-size: 13px; font-weight: 700; color: var(--accent); letter-spacing: 1px; text-transform: uppercase; }
+  .sx-variant-tabs { display: inline-flex; gap: 6px; }
+  .sx-variant-tab { background: var(--bg-dark); color: var(--text-dim); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 11px; cursor: pointer; text-transform: capitalize; }
+  .sx-variant-tab.active { background: var(--accent-2); color: #fff; border-color: var(--accent-2); }
+  .sx-company-tabs { display: flex; overflow-x: auto; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+  .sx-company-tabs::-webkit-scrollbar { height: 4px; }
+  .sx-company-tab { background: transparent; color: var(--text-dim); border: none; border-bottom: 2px solid transparent; padding: 8px 14px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: color 0.15s, border-color 0.15s; }
+  .sx-company-tab:hover { color: var(--text); }
+  .sx-company-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .sx-company-tab[disabled] { color: #4a5170; cursor: default; }
+  .sx-chart-wrap { background: var(--bg-dark); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+  .sx-chart { width: 100%; height: 200px; display: block; }
+  .sx-chart .grid line { stroke: var(--border); stroke-width: 0.5; opacity: 0.5; }
+  .sx-chart text { fill: var(--text-dim); font-size: 9px; font-family: inherit; }
+  .sx-chart polyline { fill: none; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+  .sx-chart-empty { color: var(--text-dim); font-size: 12px; text-align: center; padding: 70px 0; }
+  .sx-grade-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+  .sx-grade-card { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .sx-grade-card .label { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); font-weight: 600; margin-bottom: 4px; }
+  .sx-grade-card .label .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .sx-grade-card .price { font-size: 18px; font-weight: 800; color: var(--text); }
+  .sx-grade-card .meta { font-size: 10px; color: var(--text-dim); margin-top: 2px; display: flex; gap: 6px; }
+  .sx-grade-card .meta .up { color: var(--green); }
+  .sx-grade-card .meta .down { color: var(--red); }
+  .sx-status { padding: 14px; text-align: center; color: var(--text-dim); font-size: 12px; }
   .expansion-list::-webkit-scrollbar { width: 6px; }
   .expansion-list::-webkit-scrollbar-track { background: var(--bg-dark); }
   .expansion-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
@@ -1303,6 +1332,40 @@ async function fetchScrydexSet(id) {
   return json;
 }
 
+// Convert a TCGdex card id (e.g. "sv01-007") to scrydex format ("sv1-7").
+// Already-scrydex ids (containing underscore, e.g. "m2a_ja-223") pass through.
+function tcgdexToScrydexId(cardId) {
+  if (!cardId) return null;
+  if (cardId.includes('_')) return cardId;
+  const idx = cardId.indexOf('-');
+  if (idx < 0) return cardId;
+  const setCode = cardId.slice(0, idx);
+  const cardNum = cardId.slice(idx + 1);
+  const cleanedSet = setCode.replace(/^([a-z]+)0+(?=\d)/i, '$1');
+  const cleanedNum = cardNum.replace(/^0+(?=\d)/, '');
+  return `${cleanedSet}-${cleanedNum}`;
+}
+
+async function fetchScrydexCardPrices(card) {
+  const scrydexId = tcgdexToScrydexId(card.id);
+  if (!scrydexId) return null;
+  const variant = card.variant || 'normal';
+  const cacheKey = `scrydex-card:${scrydexId}:${variant}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) return cached;
+  try {
+    const res = await fetch(`/api/scrydex-card?id=${encodeURIComponent(scrydexId)}&variant=${encodeURIComponent(variant)}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json?.hasData) cacheSet(cacheKey, json, 3600);
+    return json;
+  } catch { return null; }
+}
+
+// Display order + Scrydex-style series colors
+const SCRYDEX_COMPANIES = ['Raw', 'PSA', 'BGS', 'CGC', 'TAG', 'ACE', 'ARS', 'CCIC', 'AGS', 'SGC'];
+const SCRYDEX_SERIES_COLORS = ['#2F80ED', '#56CCF2', '#F2994A', '#EB5757'];
+
 // English type → energy CSS class + Japanese label
 const TYPE_INFO = {
   'Grass':     { cls: 'energy-grass',     ja: '草',         emoji: '🌿' },
@@ -2078,6 +2141,7 @@ async function openCardModal(id) {
   if (localCard?.source === 'scrydex') {
     renderCardModal(localCard);
     loadCardTraderPrice(localCard);
+    loadScrydexPrices(localCard);
     return;
   }
 
@@ -2085,6 +2149,7 @@ async function openCardModal(id) {
     const card = await apiGet(`/cards/${id}`, `card:${id}`, 3600);
     renderCardModal(card);
     loadCardTraderPrice(card);
+    loadScrydexPrices(card);
   } catch (err) {
     $('#modalBody').innerHTML = `
       <div class="error-state">
@@ -2190,6 +2255,11 @@ function renderCardModal(card) {
       </p>
     </div>
 
+    <div class="modal-section" id="scrydexPricingSection">
+      <h3>📊 Price History — Scrydex</h3>
+      <div class="sx-price-panel"><div class="sx-status"><span class="spinner" style="display:inline-block;width:12px;height:12px;border-width:2px;vertical-align:middle;margin-right:8px"></span>Loading price history…</div></div>
+    </div>
+
     <div class="modal-section">
       <h3>Market Pricing — CardTrader 🌍 (EN cards)</h3>
       <div id="cardtraderPricing">
@@ -2261,6 +2331,165 @@ function renderTcgdexPricing(pricing) {
   }
   if (boxes.length === 0) return '';
   return `<div class="modal-section"><h3>TCGplayer / Cardmarket (EN/EU)</h3><div class="pricing-grid">${boxes.join('')}</div></div>`;
+}
+
+// =====================
+// SCRYDEX PRICE-HISTORY PANEL
+// =====================
+let sxState = { card: null, data: null, variant: null, company: null };
+
+async function loadScrydexPrices(card) {
+  const target = document.getElementById('scrydexPricingSection');
+  if (!target) return;
+  const data = await fetchScrydexCardPrices(card);
+  if (!data || !data.hasData) {
+    target.innerHTML = `
+      <h3>📊 Price History — Scrydex</h3>
+      <div class="sx-price-panel"><div class="sx-status">No price history available for this card on Scrydex.</div></div>
+    `;
+    return;
+  }
+  sxState = { card, data, variant: data.variants[0], company: null };
+  for (const c of SCRYDEX_COMPANIES) {
+    if (data.byVariantCompany[sxState.variant]?.[c]) { sxState.company = c; break; }
+  }
+  renderScrydexPricePanel();
+}
+
+function renderScrydexPricePanel() {
+  const target = document.getElementById('scrydexPricingSection');
+  if (!target || !sxState.data) return;
+  const { data, variant, company } = sxState;
+  const series = data.byVariantCompany[variant]?.[company]?.series || [];
+
+  const variantTabs = data.variants.map(v => `
+    <button type="button" class="sx-variant-tab ${v === variant ? 'active' : ''}" data-sx-variant="${escapeHtml(v)}">${escapeHtml(v)}</button>
+  `).join('');
+
+  const companyTabs = SCRYDEX_COMPANIES.map(c => {
+    const has = !!data.byVariantCompany[variant]?.[c];
+    return `<button type="button" class="sx-company-tab ${c === company ? 'active' : ''}" data-sx-company="${escapeHtml(c)}" ${has ? '' : 'disabled'}>${escapeHtml(c)}</button>`;
+  }).join('');
+
+  target.innerHTML = `
+    <h3 style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span>📊 Price History — Scrydex</span>
+      <div class="sx-variant-tabs">${variantTabs}</div>
+    </h3>
+    <div class="sx-price-panel">
+      <div class="sx-company-tabs">${companyTabs}</div>
+      <div class="sx-chart-wrap">${renderSxChart(series)}</div>
+      <div class="sx-grade-grid">${renderSxGradeGrid(series)}</div>
+    </div>
+  `;
+
+  target.querySelectorAll('[data-sx-variant]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      sxState.variant = btn.dataset.sxVariant;
+      sxState.company = null;
+      for (const c of SCRYDEX_COMPANIES) {
+        if (sxState.data.byVariantCompany[sxState.variant]?.[c]) { sxState.company = c; break; }
+      }
+      renderScrydexPricePanel();
+    });
+  });
+  target.querySelectorAll('[data-sx-company]:not([disabled])').forEach(btn => {
+    btn.addEventListener('click', () => {
+      sxState.company = btn.dataset.sxCompany;
+      renderScrydexPricePanel();
+    });
+  });
+}
+
+function renderSxChart(seriesList) {
+  if (!seriesList?.length) return '<div class="sx-chart-empty">No data</div>';
+  const validSeries = seriesList.filter(s => (s.data || []).some(p => p && p[1] != null));
+  if (!validSeries.length) return '<div class="sx-chart-empty">No data</div>';
+
+  const allPts = validSeries.flatMap(s => (s.data || []).filter(p => p && p[1] != null));
+  const dates = [...new Set(seriesList.flatMap(s => (s.data || []).map(p => p[0])))].sort();
+  if (dates.length < 2) return '<div class="sx-chart-empty">Not enough data points</div>';
+
+  const dateIdx = new Map(dates.map((d, i) => [d, i]));
+  const values = allPts.map(p => p[1]);
+  let yMin = Math.min(...values);
+  let yMax = Math.max(...values);
+  if (yMin === yMax) { yMax = yMax + Math.max(1, yMax * 0.1); yMin = Math.max(0, yMin - Math.max(1, yMin * 0.1)); }
+  const yPad = (yMax - yMin) * 0.05;
+  yMin = Math.max(0, yMin - yPad);
+  yMax = yMax + yPad;
+
+  const W = 800, H = 200, padL = 50, padR = 12, padT = 8, padB = 22;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+  const xStep = innerW / Math.max(1, dates.length - 1);
+  const fmtY = v => v < 10 ? `$${v.toFixed(2)}` : v < 1000 ? `$${v.toFixed(0)}` : `$${(v / 1000).toFixed(1)}k`;
+
+  const gridParts = [];
+  for (let i = 0; i <= 4; i++) {
+    const y = padT + (innerH / 4) * i;
+    const v = yMax - (yMax - yMin) * (i / 4);
+    gridParts.push(`<line x1="${padL}" y1="${y.toFixed(1)}" x2="${(W - padR).toFixed(1)}" y2="${y.toFixed(1)}" />`);
+    gridParts.push(`<text x="${padL - 5}" y="${(y + 3).toFixed(1)}" text-anchor="end">${fmtY(v)}</text>`);
+  }
+
+  const labelCount = Math.min(4, dates.length);
+  const xLabels = [];
+  for (let i = 0; i < labelCount; i++) {
+    const di = Math.round((dates.length - 1) * (i / Math.max(1, labelCount - 1)));
+    const x = padL + xStep * di;
+    const short = dates[di].slice(5);
+    xLabels.push(`<text x="${x.toFixed(1)}" y="${(H - padB + 14).toFixed(0)}" text-anchor="middle">${short}</text>`);
+  }
+
+  const lines = seriesList.map((s, i) => {
+    const color = SCRYDEX_SERIES_COLORS[i % SCRYDEX_SERIES_COLORS.length];
+    const pts = (s.data || [])
+      .filter(p => p && p[1] != null)
+      .map(p => {
+        const x = padL + xStep * dateIdx.get(p[0]);
+        const y = padT + innerH - ((p[1] - yMin) / (yMax - yMin)) * innerH;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      })
+      .join(' ');
+    if (!pts) return '';
+    return `<polyline points="${pts}" stroke="${color}" />`;
+  }).join('');
+
+  return `<svg class="sx-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <g class="grid">${gridParts.join('')}</g>
+    ${xLabels.join('')}
+    ${lines}
+  </svg>`;
+}
+
+function renderSxGradeGrid(seriesList) {
+  if (!seriesList?.length) return '<div class="sx-status">No grades available</div>';
+  return seriesList.map((s, i) => {
+    const color = SCRYDEX_SERIES_COLORS[i % SCRYDEX_SERIES_COLORS.length];
+    const sum = s.summary;
+    if (!sum) {
+      return `<div class="sx-grade-card">
+        <div class="label"><span class="dot" style="background:${color}"></span>${escapeHtml(s.name)}</div>
+        <div class="price" style="color:var(--text-dim);font-size:14px">—</div>
+      </div>`;
+    }
+    const fmt = n => `$${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const dir = sum.change > 0 ? 'up' : sum.change < 0 ? 'down' : '';
+    const arrow = sum.change > 0 ? '▲' : sum.change < 0 ? '▼' : '';
+    const changeText = (sum.first === sum.current || !sum.first) ? '—' : `${arrow} ${(Math.abs(sum.change) * 100).toFixed(1)}%`;
+    return `
+      <div class="sx-grade-card">
+        <div class="label"><span class="dot" style="background:${color}"></span>${escapeHtml(s.name)}</div>
+        <div class="price">${fmt(sum.current)}</div>
+        <div class="meta">
+          <span class="${dir}">${changeText}</span>
+          <span title="period low">L ${fmt(sum.min)}</span>
+          <span title="period high">H ${fmt(sum.max)}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 async function loadCardTraderPrice(card) {
