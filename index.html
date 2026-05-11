@@ -555,126 +555,6 @@
   .add-collection-form .btn-add:hover { filter: brightness(1.1); }
   .add-collection-form .btn-add.added { background: var(--text-dim); cursor: default; }
 
-  /* Series filter widget */
-  .filter-widget {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    margin-bottom: 16px;
-    overflow: hidden;
-  }
-  .filter-widget-header {
-    padding: 14px 18px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
-    user-select: none;
-  }
-  .filter-widget-header h3 {
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--text);
-  }
-  .filter-toggle {
-    background: var(--bg-dark);
-    border: 1px solid var(--border);
-    color: var(--text);
-    width: 26px; height: 26px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: inherit;
-    line-height: 1;
-  }
-  .filter-widget.collapsed .filter-widget-body { display: none; }
-  .filter-widget-body { padding: 12px; }
-  .series-search {
-    width: 100%;
-    background: var(--bg-dark);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 8px 12px 8px 32px;
-    border-radius: 8px;
-    font-size: 13px;
-    margin-bottom: 8px;
-    font-family: inherit;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239aa3c0' stroke-width='2'><circle cx='11' cy='11' r='8'/><path d='m21 21-4.35-4.35'/></svg>");
-    background-repeat: no-repeat;
-    background-position: 10px center;
-  }
-  .series-search:focus { outline: none; border-color: var(--accent); }
-  .series-list {
-    max-height: 360px;
-    overflow-y: auto;
-    margin: 0 -4px;
-  }
-  .series-list::-webkit-scrollbar { width: 6px; }
-  .series-list::-webkit-scrollbar-track { background: transparent; }
-  .series-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-  .series-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background .12s ease;
-  }
-  .series-row:hover { background: var(--bg-card-2); }
-  .series-row .series-name { flex: 1; font-size: 13px; color: var(--text); }
-  .series-row .series-count {
-    background: var(--bg-dark);
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    padding: 1px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 700;
-    min-width: 28px;
-    text-align: center;
-  }
-  .series-row.selected .series-count {
-    background: rgba(255,203,5,0.15);
-    color: var(--accent);
-    border-color: rgba(255,203,5,0.4);
-  }
-  .series-row input[type="checkbox"] {
-    appearance: none;
-    width: 18px;
-    height: 18px;
-    border: 1.5px solid var(--border);
-    border-radius: 4px;
-    background: var(--bg-dark);
-    cursor: pointer;
-    position: relative;
-    flex-shrink: 0;
-  }
-  .series-row input[type="checkbox"]:hover { border-color: var(--accent-2); }
-  .series-row input[type="checkbox"]:checked {
-    background: var(--accent-2);
-    border-color: var(--accent-2);
-  }
-  .series-row input[type="checkbox"]:checked::after {
-    content: '✓';
-    position: absolute;
-    color: white;
-    font-weight: 800;
-    font-size: 12px;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-  }
-  .series-row.loading .series-name::after {
-    content: ' loading...';
-    color: var(--accent);
-    font-size: 11px;
-  }
-
   /* Filters panel (right column for cards) */
   .filters-panel {
     background: var(--bg-card);
@@ -987,20 +867,6 @@
 </div>
 
 <div class="layout">
-  <div>
-    <div class="filter-widget" id="seriesFilter">
-      <div class="filter-widget-header" id="seriesFilterToggle">
-        <h3>Series</h3>
-        <button type="button" class="filter-toggle" id="seriesCollapseBtn" title="Collapse / Expand">−</button>
-      </div>
-      <div class="filter-widget-body">
-        <input type="text" class="series-search" id="seriesSearchInput" placeholder="Search series..." />
-        <div class="series-list" id="seriesList">
-          <div class="loading-state" style="padding:20px"><div class="spinner"></div><p>Loading series...</p></div>
-        </div>
-      </div>
-    </div>
-
   <div class="panel">
     <div class="panel-header">
       <h2>Expansions</h2>
@@ -1009,7 +875,6 @@
     <div class="expansion-list" id="expansionList">
       <div class="loading-state"><div class="spinner"></div><p>Loading expansions...</p></div>
     </div>
-  </div>
   </div>
 
   <div class="panel">
@@ -1105,9 +970,8 @@ const ALL_SERIES_CATALOG = [
   { id: 'base',  label: 'Base' },
   { id: 'misc',  label: 'Miscellaneous' },
 ];
-// Default series checked on first visit
+// Series loaded by default
 const DEFAULT_SERIES = ['me', 'sv', 'swsh'];
-const SELECTED_SERIES_KEY = 'selectedSeries:v1';
 
 // English type → energy CSS class + Japanese label
 const TYPE_INFO = {
@@ -1219,11 +1083,10 @@ let state = {
   view: 'browse', // 'browse' | 'collection'
   collection: [],
   collectionPrices: {}, // cardId -> { stats per grade, fetchedAt }
-  // Series filter
+  // Series state
   seriesCatalog: {},        // { id: { label, sets: [{id, name}] } } from /series/{id}
-  selectedSeries: new Set(),// which series are checked
+  selectedSeries: new Set(),// which series are loaded into the expansion list
   loadedSeries: new Set(),  // which series have set details fetched
-  seriesSearch: '',
   // Card filters (per-expansion)
   cardDetails: {},          // expId -> [{full card detail}, ...]
   cardFilters: {            // active filter values
@@ -1316,98 +1179,21 @@ function updateCollectionTabBadge() {
 }
 
 // =====================
-// SERIES FILTER
+// SERIES (fixed default — no UI widget)
 // =====================
-function loadSelectedSeries() {
-  try {
-    const raw = localStorage.getItem(SELECTED_SERIES_KEY);
-    if (raw) return new Set(JSON.parse(raw));
-  } catch {}
-  return new Set(DEFAULT_SERIES);
-}
-function saveSelectedSeries() {
-  try {
-    localStorage.setItem(SELECTED_SERIES_KEY, JSON.stringify([...state.selectedSeries]));
-  } catch {}
-}
-
 async function loadSeriesCatalog() {
-  // Fetch /series/{id} for ALL series in parallel — light, just gets {sets:[{id,name}]}
-  const results = await Promise.all(ALL_SERIES_CATALOG.map(async s => {
+  const results = await Promise.all(DEFAULT_SERIES.map(async id => {
+    const meta = ALL_SERIES_CATALOG.find(s => s.id === id) || { id, label: id };
     try {
-      const data = await apiGet(`/series/${s.id}`, `series:${s.id}`, 86400);
-      return { id: s.id, label: s.label, sets: data.sets || [] };
+      const data = await apiGet(`/series/${id}`, `series:${id}`, 86400);
+      return { id, label: meta.label, sets: data.sets || [] };
     } catch {
-      return { id: s.id, label: s.label, sets: [] };
+      return { id, label: meta.label, sets: [] };
     }
   }));
   for (const r of results) {
     state.seriesCatalog[r.id] = { label: r.label, sets: r.sets };
   }
-}
-
-async function loadSeriesDetail(seriesId) {
-  if (state.loadedSeries.has(seriesId)) return;
-  const cat = state.seriesCatalog[seriesId];
-  if (!cat) return;
-  // Fetch full /sets/{id} for each set in this series
-  const enriched = await Promise.all(cat.sets.map(async s => {
-    try {
-      const detail = await apiGet(`/sets/${s.id}`, `set:${s.id}`, 86400);
-      return { ...s, ...detail, serieName: cat.label, serieId: seriesId };
-    } catch { return null; }
-  }));
-  for (const e of enriched.filter(Boolean)) {
-    if (!state.expansions.find(x => x.id === e.id)) state.expansions.push(e);
-  }
-  state.loadedSeries.add(seriesId);
-}
-
-function renderSeriesFilter() {
-  const q = state.seriesSearch.toLowerCase();
-  // Sort by total set count descending (matches the screenshot pattern)
-  const list = Object.entries(state.seriesCatalog)
-    .map(([id, v]) => ({ id, label: v.label, count: v.sets.length }))
-    .filter(s => !q || s.label.toLowerCase().includes(q))
-    .sort((a, b) => b.count - a.count);
-
-  if (list.length === 0) {
-    $('#seriesList').innerHTML = '<div style="padding:14px;text-align:center;color:var(--text-dim);font-size:12px">No series match search</div>';
-    return;
-  }
-
-  $('#seriesList').innerHTML = list.map(s => {
-    const checked = state.selectedSeries.has(s.id);
-    return `
-      <label class="series-row ${checked ? 'selected' : ''}" data-series="${escapeHtml(s.id)}">
-        <input type="checkbox" ${checked ? 'checked' : ''} data-series="${escapeHtml(s.id)}">
-        <span class="series-name">${escapeHtml(s.label)}</span>
-        <span class="series-count">${s.count}</span>
-      </label>
-    `;
-  }).join('');
-
-  $('#seriesList').querySelectorAll('input[type="checkbox"]').forEach(cb => {
-    cb.addEventListener('change', () => handleSeriesToggle(cb.dataset.series, cb.checked));
-  });
-}
-
-async function handleSeriesToggle(seriesId, checked) {
-  if (checked) state.selectedSeries.add(seriesId);
-  else state.selectedSeries.delete(seriesId);
-  saveSelectedSeries();
-  renderSeriesFilter();
-
-  if (checked && !state.loadedSeries.has(seriesId)) {
-    // Mark row as loading
-    const row = $('#seriesList').querySelector(`label[data-series="${seriesId}"]`);
-    if (row) row.classList.add('loading');
-    await loadSeriesDetail(seriesId);
-    if (row) row.classList.remove('loading');
-  }
-
-  renderStats();
-  renderExpansionList();
 }
 
 // =====================
@@ -2546,12 +2332,6 @@ document.querySelectorAll('.view-tab').forEach(tab => {
   tab.addEventListener('click', () => setView(tab.dataset.view));
 });
 
-// Series filter widget
-$('#seriesSearchInput').addEventListener('input', e => {
-  state.seriesSearch = e.target.value;
-  renderSeriesFilter();
-});
-
 // Filters panel: view-mode buttons
 document.querySelectorAll('.view-mode-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -2563,12 +2343,6 @@ document.querySelectorAll('.view-mode-btn').forEach(btn => {
 
 // Filters panel: clear all
 $('#clearFiltersBtn').addEventListener('click', clearCardFilters);
-$('#seriesFilterToggle').addEventListener('click', e => {
-  if (e.target.closest('input')) return; // ignore checkbox/search clicks
-  const widget = $('#seriesFilter');
-  widget.classList.toggle('collapsed');
-  $('#seriesCollapseBtn').textContent = widget.classList.contains('collapsed') ? '+' : '−';
-});
 
 // =====================
 // INIT
@@ -2578,15 +2352,14 @@ async function init() {
   $('#liveBadge').innerHTML = '<span class="dot"></span>Connecting to TCGdex...';
 
   try {
-    // Step 1: Load all series catalogs (light) so the filter widget renders with counts
+    // Step 1: Load series catalogs (set lists) for the default series only
     $('#expansionList').innerHTML = `
       <div class="loading-state"><div class="spinner"></div><p>Loading series catalog...</p></div>
     `;
     await loadSeriesCatalog();
-    state.selectedSeries = loadSelectedSeries();
-    renderSeriesFilter();
+    state.selectedSeries = new Set(DEFAULT_SERIES);
 
-    // Step 2: Load set details only for the currently-selected series
+    // Step 2: Load set details for those series
     const selected = [...state.selectedSeries];
     const totalSets = selected.reduce((s, id) => s + (state.seriesCatalog[id]?.sets?.length || 0), 0);
     let done = 0;
