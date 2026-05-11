@@ -675,6 +675,235 @@
     font-size: 11px;
   }
 
+  /* Filters panel (right column for cards) */
+  .filters-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px;
+    align-self: start;
+    position: sticky;
+    top: 20px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+  }
+  .filters-panel::-webkit-scrollbar { width: 6px; }
+  .filters-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .filters-panel-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 12px;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .filters-panel-title .clear-all {
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .filters-panel-title .clear-all:hover { color: var(--red); border-color: var(--red); }
+
+  .view-options-section { margin-bottom: 16px; }
+  .view-options-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+  .view-mode-buttons {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-dark);
+    padding: 4px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .view-mode-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    padding: 6px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all .12s ease;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+  .view-mode-btn:hover { color: var(--text); }
+  .view-mode-btn.active {
+    background: var(--accent-2);
+    color: white;
+  }
+
+  /* Collapsible facet section */
+  .facet-section {
+    border-top: 1px solid var(--border);
+    padding: 10px 0;
+  }
+  .facet-section:first-of-type { border-top: none; padding-top: 0; }
+  .facet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    padding: 4px 0;
+  }
+  .facet-header .facet-toggle {
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text);
+    width: 22px; height: 22px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .facet-body { margin-top: 10px; }
+  .facet-section.collapsed .facet-body { display: none; }
+  .facet-search {
+    width: 100%;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px 6px 28px;
+    border-radius: 6px;
+    font-size: 12px;
+    margin-bottom: 6px;
+    font-family: inherit;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239aa3c0' stroke-width='2'><circle cx='11' cy='11' r='8'/><path d='m21 21-4.35-4.35'/></svg>");
+    background-repeat: no-repeat;
+    background-position: 8px center;
+  }
+  .facet-search:focus { outline: none; border-color: var(--accent); }
+  .facet-list-items {
+    max-height: 220px;
+    overflow-y: auto;
+    margin: 0 -4px;
+  }
+  .facet-list-items::-webkit-scrollbar { width: 5px; }
+  .facet-list-items::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .facet-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background .12s ease;
+  }
+  .facet-row:hover { background: var(--bg-card-2); }
+  .facet-row .facet-name { flex: 1; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .facet-row .facet-count {
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 0 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 22px;
+    text-align: center;
+  }
+  .facet-row.selected .facet-count {
+    background: rgba(255,203,5,0.15);
+    color: var(--accent);
+    border-color: rgba(255,203,5,0.4);
+  }
+  .facet-row input[type="checkbox"] {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid var(--border);
+    border-radius: 3px;
+    background: var(--bg-dark);
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .facet-row input[type="checkbox"]:hover { border-color: var(--accent-2); }
+  .facet-row input[type="checkbox"]:checked {
+    background: var(--accent-2);
+    border-color: var(--accent-2);
+  }
+  .facet-row input[type="checkbox"]:checked::after {
+    content: '✓';
+    position: absolute;
+    color: white;
+    font-weight: 800;
+    font-size: 11px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .facet-loading {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 11px;
+    padding: 10px;
+  }
+
+  /* Layout: add 3rd column when expansion is selected */
+  .layout.with-filters { grid-template-columns: 320px 1fr 280px; }
+  @media (max-width: 1280px) {
+    .layout.with-filters { grid-template-columns: 280px 1fr 260px; }
+  }
+  @media (max-width: 980px) {
+    .layout.with-filters { grid-template-columns: 1fr; }
+    .filters-panel { position: static; max-height: none; }
+  }
+
+  /* Cards in list mode */
+  .cards-list {
+    display: flex;
+    flex-direction: column;
+    padding: 6px;
+  }
+  .cards-list .card {
+    display: grid;
+    grid-template-columns: 60px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    margin: 0;
+    padding: 10px;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    border-left: none; border-right: none; border-top: none;
+    transform: none !important;
+  }
+  .cards-list .card:hover { background: var(--bg-card-2); border-color: var(--border); box-shadow: none; transform: none; }
+  .cards-list .card-image { aspect-ratio: 0.72; width: 50px; margin-bottom: 0; }
+  .cards-list .card-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Cards in table mode */
+  .cards-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .cards-table thead tr { background: var(--bg-card-2); color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .cards-table th, .cards-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+  .cards-table tbody tr { cursor: pointer; }
+  .cards-table tbody tr:hover { background: var(--bg-card-2); }
+  .cards-table .card-img-thumb { width: 40px; aspect-ratio: 0.72; border-radius: 3px; object-fit: cover; }
+
   .footer {
     text-align: center;
     margin-top: 30px;
@@ -796,6 +1025,29 @@
       </div>
     </div>
   </div>
+
+  <aside class="filters-panel" id="filtersPanel" style="display:none">
+    <div class="filters-panel-title">
+      <span>▼ Filters</span>
+      <button type="button" class="clear-all" id="clearFiltersBtn">Clear all</button>
+    </div>
+
+    <div class="view-options-section">
+      <div class="view-options-label">View Options</div>
+      <div class="view-mode-buttons" id="viewModeButtons">
+        <button type="button" class="view-mode-btn active" data-mode="grid">▦ Grid</button>
+        <button type="button" class="view-mode-btn" data-mode="list">☰ List</button>
+        <button type="button" class="view-mode-btn" data-mode="table">⊞ Table</button>
+      </div>
+    </div>
+
+    <div id="facetsContainer">
+      <div class="facet-loading">
+        <span class="spinner" style="display:inline-block;width:14px;height:14px;border-width:2px;vertical-align:middle;margin-right:6px"></span>
+        Select an expansion to see filters
+      </div>
+    </div>
+  </aside>
 </div>
 
 </div><!-- /browseView -->
@@ -972,7 +1224,33 @@ let state = {
   selectedSeries: new Set(),// which series are checked
   loadedSeries: new Set(),  // which series have set details fetched
   seriesSearch: '',
+  // Card filters (per-expansion)
+  cardDetails: {},          // expId -> [{full card detail}, ...]
+  cardFilters: {            // active filter values
+    supertype: new Set(),
+    type: new Set(),
+    rarity: new Set(),
+    subtype: new Set(),
+    illustrator: new Set(),
+    weakness: new Set(),
+    resistance: new Set(),
+  },
+  facetSearch: {},          // facet -> search string
+  expandedFacets: new Set(['supertype']), // facets that are open
+  cardViewMode: 'grid',     // 'grid' | 'list' | 'table'
+  cardDetailsLoading: false,
 };
+
+// Order + label of facets (matches the screenshot)
+const FACET_DEFS = [
+  { id: 'supertype',   label: 'Supertype',   field: 'category' },
+  { id: 'type',        label: 'Type',        field: 'types',         multi: true },
+  { id: 'subtype',     label: 'Subtype',     field: 'stage' },
+  { id: 'rarity',      label: 'Rarity',      field: 'rarity' },
+  { id: 'illustrator', label: 'Artist',      field: 'illustrator' },
+  { id: 'weakness',    label: 'Weakness',    field: 'weaknesses',    multi: true, sub: 'type' },
+  { id: 'resistance',  label: 'Resistance',  field: 'resistances',   multi: true, sub: 'type' },
+];
 
 // =====================
 // COLLECTION (localStorage)
@@ -1133,6 +1411,182 @@ async function handleSeriesToggle(seriesId, checked) {
 }
 
 // =====================
+// CARD FILTERS (per-expansion)
+// =====================
+async function prefetchCardDetails(expId, onProgress) {
+  const cards = state.cardsByExp[expId] || [];
+  state.cardDetails[expId] = state.cardDetails[expId] || [];
+  const existing = new Set(state.cardDetails[expId].map(c => c.id));
+  const todo = cards.filter(c => !existing.has(c.id));
+  if (todo.length === 0) return;
+
+  state.cardDetailsLoading = true;
+  let done = state.cardDetails[expId].length;
+  const total = cards.length;
+  if (onProgress) onProgress(done, total);
+
+  await Promise.all(todo.map(async c => {
+    try {
+      const detail = await apiGet(`/cards/${c.id}`, `card:${c.id}`, 86400);
+      state.cardDetails[expId].push(detail);
+    } catch {}
+    done++;
+    if (onProgress) onProgress(done, total);
+  }));
+  state.cardDetailsLoading = false;
+}
+
+function getFieldValues(card, def) {
+  const v = card?.[def.field];
+  if (v == null) return [];
+  if (def.multi) {
+    const arr = Array.isArray(v) ? v : [v];
+    return arr.map(x => def.sub ? x?.[def.sub] : x).filter(Boolean);
+  }
+  return [v];
+}
+
+function buildFacets(cards) {
+  const facets = {};
+  for (const def of FACET_DEFS) {
+    const counts = new Map();
+    for (const card of cards) {
+      const values = getFieldValues(card, def);
+      for (const v of values) counts.set(v, (counts.get(v) || 0) + 1);
+    }
+    facets[def.id] = counts;
+  }
+  return facets;
+}
+
+function applyCardFilters(cards) {
+  const f = state.cardFilters;
+  return cards.filter(card => {
+    for (const def of FACET_DEFS) {
+      const sel = f[def.id];
+      if (!sel || sel.size === 0) continue;
+      const values = getFieldValues(card, def);
+      if (!values.some(v => sel.has(v))) return false;
+    }
+    return true;
+  });
+}
+
+function getDisplayCards(expId) {
+  // Use detailed cards if available (so filters work), else fall back to basic
+  const detailed = state.cardDetails[expId] || [];
+  const basic = state.cardsByExp[expId] || [];
+  if (detailed.length === basic.length && detailed.length > 0) return detailed;
+  if (detailed.length > 0) {
+    // Mix: detailed where available, basic otherwise
+    const detailedMap = new Map(detailed.map(c => [c.id, c]));
+    return basic.map(c => detailedMap.get(c.id) || c);
+  }
+  return basic;
+}
+
+function clearCardFilters() {
+  for (const def of FACET_DEFS) state.cardFilters[def.id].clear();
+  state.facetSearch = {};
+  renderFiltersPanel();
+  renderCards();
+}
+
+function renderFiltersPanel() {
+  if (!state.selectedExpansion) {
+    $('#filtersPanel').style.display = 'none';
+    document.querySelector('.layout').classList.remove('with-filters');
+    return;
+  }
+  $('#filtersPanel').style.display = '';
+  document.querySelector('.layout').classList.add('with-filters');
+
+  const cards = getDisplayCards(state.selectedExpansion);
+  const detailed = state.cardDetails[state.selectedExpansion] || [];
+  const facets = buildFacets(detailed);
+
+  if (detailed.length === 0) {
+    $('#facetsContainer').innerHTML = `
+      <div class="facet-loading">
+        <span class="spinner" style="display:inline-block;width:14px;height:14px;border-width:2px;vertical-align:middle;margin-right:6px"></span>
+        Loading filter options...
+      </div>
+    `;
+    return;
+  }
+
+  const html = FACET_DEFS.map(def => {
+    const counts = facets[def.id];
+    const items = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([value, count]) => ({ value, count }));
+    if (items.length === 0) return '';
+
+    const collapsed = !state.expandedFacets.has(def.id);
+    const search = (state.facetSearch[def.id] || '').toLowerCase();
+    const filtered = search ? items.filter(it => String(it.value).toLowerCase().includes(search)) : items;
+    const showSearch = items.length > 6;
+
+    const rows = filtered.map(it => {
+      const checked = state.cardFilters[def.id].has(it.value);
+      return `
+        <label class="facet-row ${checked ? 'selected' : ''}">
+          <input type="checkbox" ${checked ? 'checked' : ''} data-facet="${escapeHtml(def.id)}" data-value="${escapeHtml(String(it.value))}">
+          <span class="facet-name" title="${escapeHtml(String(it.value))}">${escapeHtml(String(it.value))}</span>
+          <span class="facet-count">${it.count}</span>
+        </label>
+      `;
+    }).join('');
+
+    return `
+      <div class="facet-section ${collapsed ? 'collapsed' : ''}" data-facet="${escapeHtml(def.id)}">
+        <div class="facet-header" data-facet-toggle="${escapeHtml(def.id)}">
+          <span>${escapeHtml(def.label)}</span>
+          <button type="button" class="facet-toggle">${collapsed ? '+' : '−'}</button>
+        </div>
+        <div class="facet-body">
+          ${showSearch ? `<input type="text" class="facet-search" placeholder="Search ${escapeHtml(def.label.toLowerCase())}..." data-facet-search="${escapeHtml(def.id)}" value="${escapeHtml(state.facetSearch[def.id] || '')}">` : ''}
+          <div class="facet-list-items">${rows || `<div class="facet-loading">No matches</div>`}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  $('#facetsContainer').innerHTML = html;
+
+  // Wire up checkbox changes
+  $('#facetsContainer').querySelectorAll('input[type="checkbox"][data-facet]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const facet = cb.dataset.facet;
+      const value = cb.dataset.value;
+      // Note: 'true'/'false' strings if value was bool; but our values are strings
+      if (cb.checked) state.cardFilters[facet].add(value);
+      else state.cardFilters[facet].delete(value);
+      renderFiltersPanel();
+      renderCards();
+    });
+  });
+  // Wire up section collapse
+  $('#facetsContainer').querySelectorAll('[data-facet-toggle]').forEach(el => {
+    el.addEventListener('click', e => {
+      if (e.target.tagName === 'INPUT') return;
+      const id = el.dataset.facetToggle;
+      if (state.expandedFacets.has(id)) state.expandedFacets.delete(id);
+      else state.expandedFacets.add(id);
+      renderFiltersPanel();
+    });
+  });
+  // Wire up facet search
+  $('#facetsContainer').querySelectorAll('input[type="text"][data-facet-search]').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const id = e.target.dataset.facetSearch;
+      state.facetSearch[id] = e.target.value;
+      renderFiltersPanel();
+    });
+  });
+}
+
+// =====================
 // VIEW SWITCHER
 // =====================
 function setView(view) {
@@ -1254,6 +1708,14 @@ async function selectExpansion(id) {
       state.cardsByExp[id] = set.cards || [];
     }
     renderCards();
+    renderFiltersPanel();
+    // Background-fetch full card details so filters work
+    prefetchCardDetails(id, () => {
+      // Re-render filters panel periodically to update facets as data arrives
+    }).then(() => {
+      renderFiltersPanel();
+      renderCards();
+    });
   } catch (err) {
     $('#cardsContainer').innerHTML = `<div class="error-state"><div class="icon">⚠</div><h3>Failed to load cards</h3><p>${escapeHtml(err.message)}</p></div>`;
   }
@@ -1262,20 +1724,23 @@ async function selectExpansion(id) {
 function renderCards() {
   const id = state.selectedExpansion;
   if (!id) return;
-  let cards = (state.cardsByExp[id] || []).slice();
+  let cards = getDisplayCards(id).slice();
 
   const q = state.search.toLowerCase();
   if (q) {
-    cards = cards.filter(c => (c.name || '').toLowerCase().includes(q));
+    cards = cards.filter(c =>
+      (c.name || '').toLowerCase().includes(q)
+      || (c.illustrator || '').toLowerCase().includes(q)
+      || (c.rarity || '').toLowerCase().includes(q)
+    );
   }
-  // Note: Type filter requires fetching each card detail (basic list doesn't have types)
-  // We'll filter post-hydration only if user filtered. For simplicity, hide type filter when no detail loaded.
+  // Apply Filters panel selections (works once details are loaded)
+  cards = applyCardFilters(cards);
 
   if (state.sortBy === 'name') {
-    cards.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja'));
+    cards.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   } else if (state.sortBy === 'rarity') {
-    // Rarity not in basic list — fallback to number
-    cards.sort((a, b) => (parseInt(a.localId, 10) || 0) - (parseInt(b.localId, 10) || 0));
+    cards.sort((a, b) => String(b.rarity || '').localeCompare(String(a.rarity || '')));
   } else {
     cards.sort((a, b) => (parseInt(a.localId, 10) || 0) - (parseInt(b.localId, 10) || 0));
   }
@@ -1289,25 +1754,84 @@ function renderCards() {
 
   const expCount = state.expansions.find(e => e.id === id)?.cardCount?.official || cards.length;
 
+  if (state.cardViewMode === 'list') {
+    renderCardsListView(cards, expCount);
+  } else if (state.cardViewMode === 'table') {
+    renderCardsTableView(cards, expCount);
+  } else {
+    renderCardsGridView(cards, expCount);
+  }
+
+  document.querySelectorAll('[data-card-click]').forEach(el => {
+    el.addEventListener('click', () => openCardModal(el.dataset.cardClick));
+  });
+}
+
+function renderCardsGridView(cards, expCount) {
   $('#cardsContainer').innerHTML = `<div class="cards-grid">${cards.map(c => {
     const img = imgUrl(c.image, 'low');
     return `
-      <div class="card" data-id="${escapeHtml(c.id)}">
+      <div class="card" data-card-click="${escapeHtml(c.id)}">
         <div class="card-image">
           ${img
             ? `<img src="${escapeHtml(img)}" alt="${escapeHtml(c.name)}" loading="lazy" onerror="this.style.display='none'">`
             : `<div class="card-art-fallback">🎴</div>`
           }
+          ${c.rarity ? `<div class="card-rarity">${escapeHtml(c.rarity)}</div>` : ''}
         </div>
         <div class="card-name">${escapeHtml(c.name)}</div>
         <div class="card-number">#${escapeHtml(c.localId || '')} / ${expCount}</div>
       </div>
     `;
   }).join('')}</div>`;
+}
 
-  document.querySelectorAll('.card').forEach(el => {
-    el.addEventListener('click', () => openCardModal(el.dataset.id));
-  });
+function renderCardsListView(cards, expCount) {
+  $('#cardsContainer').innerHTML = `<div class="cards-list">${cards.map(c => {
+    const img = imgUrl(c.image, 'low');
+    return `
+      <div class="card" data-card-click="${escapeHtml(c.id)}">
+        <div class="card-image">
+          ${img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy">` : '🎴'}
+        </div>
+        <div>
+          <div class="card-name">${escapeHtml(c.name)}</div>
+          <div class="card-number">#${escapeHtml(c.localId || '')} / ${expCount} · ${escapeHtml(c.rarity || '')}${c.category ? ' · ' + escapeHtml(c.category) : ''}</div>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);text-align:right">
+          ${(c.types || []).join(', ')}
+        </div>
+      </div>
+    `;
+  }).join('')}</div>`;
+}
+
+function renderCardsTableView(cards, expCount) {
+  $('#cardsContainer').innerHTML = `
+    <div style="overflow-x:auto;padding:6px">
+      <table class="cards-table">
+        <thead><tr>
+          <th></th><th>#</th><th>Name</th><th>Type</th><th>Rarity</th><th>Stage</th><th>Artist</th>
+        </tr></thead>
+        <tbody>
+        ${cards.map(c => {
+          const img = imgUrl(c.image, 'low');
+          return `
+            <tr data-card-click="${escapeHtml(c.id)}">
+              <td>${img ? `<img class="card-img-thumb" src="${escapeHtml(img)}" loading="lazy">` : ''}</td>
+              <td>${escapeHtml(c.localId || '')}</td>
+              <td><strong>${escapeHtml(c.name)}</strong></td>
+              <td>${(c.types || []).join(', ') || '-'}</td>
+              <td>${escapeHtml(c.rarity || '-')}</td>
+              <td>${escapeHtml(c.stage || '-')}</td>
+              <td>${escapeHtml(c.illustrator || '-')}</td>
+            </tr>
+          `;
+        }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 async function openCardModal(id) {
@@ -2027,6 +2551,18 @@ $('#seriesSearchInput').addEventListener('input', e => {
   state.seriesSearch = e.target.value;
   renderSeriesFilter();
 });
+
+// Filters panel: view-mode buttons
+document.querySelectorAll('.view-mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    state.cardViewMode = btn.dataset.mode;
+    document.querySelectorAll('.view-mode-btn').forEach(b => b.classList.toggle('active', b === btn));
+    renderCards();
+  });
+});
+
+// Filters panel: clear all
+$('#clearFiltersBtn').addEventListener('click', clearCardFilters);
 $('#seriesFilterToggle').addEventListener('click', e => {
   if (e.target.closest('input')) return; // ignore checkbox/search clicks
   const widget = $('#seriesFilter');
