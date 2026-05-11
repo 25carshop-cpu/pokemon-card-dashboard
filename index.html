@@ -2450,10 +2450,12 @@ function renderTcgdexPricing(pricing) {
 // =====================
 // SCRYDEX PRICE-HISTORY PANEL
 // =====================
-let sxState = { card: null, data: null, variant: null, company: null };
+// One panel state per (key, target) so the modal and each watchlist row can coexist
+const sxPanels = new Map(); // key → { data, variant, company }
 
-async function loadScrydexPrices(card) {
-  const target = document.getElementById('scrydexPricingSection');
+async function loadScrydexPrices(card, target, key) {
+  key = key || card.id || 'modal';
+  target = target || document.getElementById('scrydexPricingSection');
   if (!target) return;
   const data = await fetchScrydexCardPrices(card);
   if (!data || !data.hasData) {
@@ -2478,17 +2480,18 @@ async function loadScrydexPrices(card) {
     `;
     return;
   }
-  sxState = { card, data, variant: data.variants[0], company: null };
+  const state = { data, variant: data.variants[0], company: null };
   for (const c of SCRYDEX_COMPANIES) {
-    if (data.byVariantCompany[sxState.variant]?.[c]) { sxState.company = c; break; }
+    if (data.byVariantCompany[state.variant]?.[c]) { state.company = c; break; }
   }
-  renderScrydexPricePanel();
+  sxPanels.set(key, state);
+  renderScrydexPricePanel(key, target);
 }
 
-function renderScrydexPricePanel() {
-  const target = document.getElementById('scrydexPricingSection');
-  if (!target || !sxState.data) return;
-  const { data, variant, company } = sxState;
+function renderScrydexPricePanel(key, target) {
+  const state = sxPanels.get(key);
+  if (!state || !target) return;
+  const { data, variant, company } = state;
   const series = data.byVariantCompany[variant]?.[company]?.series || [];
 
   const variantTabs = data.variants.map(v => `
@@ -2514,18 +2517,18 @@ function renderScrydexPricePanel() {
 
   target.querySelectorAll('[data-sx-variant]').forEach(btn => {
     btn.addEventListener('click', () => {
-      sxState.variant = btn.dataset.sxVariant;
-      sxState.company = null;
+      state.variant = btn.dataset.sxVariant;
+      state.company = null;
       for (const c of SCRYDEX_COMPANIES) {
-        if (sxState.data.byVariantCompany[sxState.variant]?.[c]) { sxState.company = c; break; }
+        if (state.data.byVariantCompany[state.variant]?.[c]) { state.company = c; break; }
       }
-      renderScrydexPricePanel();
+      renderScrydexPricePanel(key, target);
     });
   });
   target.querySelectorAll('[data-sx-company]').forEach(btn => {
     btn.addEventListener('click', () => {
-      sxState.company = btn.dataset.sxCompany;
-      renderScrydexPricePanel();
+      state.company = btn.dataset.sxCompany;
+      renderScrydexPricePanel(key, target);
     });
   });
 }
@@ -3286,6 +3289,19 @@ async function renderWatchlist() {
     } catch {}
   }));
   wireWatchlistRemoveButtons();
+  loadWatchlistScrydexPanels();
+}
+
+function loadWatchlistScrydexPanels() {
+  for (const item of state.watchlist) {
+    const target = document.querySelector(`[data-watchlist-sx="${CSS.escape(item.id)}"]`);
+    if (!target) continue;
+    target.innerHTML = `<div class="sx-price-panel"><div class="sx-status"><span class="spinner" style="display:inline-block;width:12px;height:12px;border-width:2px;vertical-align:middle;margin-right:8px"></span>Loading price history…</div></div>`;
+    // Build a card-like object that fetchScrydexCardPrices accepts
+    const cardId = `${(item.setId || '').toLowerCase()}-${item.localId}`;
+    const cardObj = { id: cardId, name: item.name };
+    loadScrydexPrices(cardObj, target, `wl:${item.id}`).catch(() => {});
+  }
 }
 
 function renderWatchlistCard(item, idx, prices) {
@@ -3380,6 +3396,7 @@ function renderWatchlistCard(item, idx, prices) {
           </a>
         `).join('')}
       </div>
+      <div class="watchlist-sx" data-watchlist-sx="${escapeHtml(item.id)}" style="margin-top:14px"></div>
     </div>
   `;
 }
