@@ -12,6 +12,56 @@ function decodeHtmlEntities(s) {
     .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&nbsp;/g, ' ');
 }
 
+const TYPE_NAMES = ['grass', 'fire', 'water', 'lightning', 'psychic', 'fighting', 'darkness', 'metal', 'dragon', 'fairy', 'colorless'];
+
+function extractCardDetail(html) {
+  const detail = {};
+
+  // Simple labeled fields: artist, rarity, language, printed_number
+  const FIELD_RE = /<div class="text-body-16 text-mono-4">([^<]+)<\/div>[\s\S]{0,300}?<div data-field="([a-z_]+)"/g;
+  let m;
+  while ((m = FIELD_RE.exec(html)) !== null) {
+    detail[m[2]] = decodeHtmlEntities(m[1]).trim();
+  }
+
+  // HP
+  const hpMatch = /<span class="text-white">HP\s+(\d+)<\/span>/.exec(html);
+  if (hpMatch) detail.hp = parseInt(hpMatch[1], 10);
+
+  // Types: pokemon type icons (e.g. fire-{hash}.png) near data-field="types"
+  const typesIdx = html.indexOf('data-field="types"');
+  if (typesIdx >= 0) {
+    const sliceStart = Math.max(0, typesIdx - 600);
+    const slice = html.slice(sliceStart, typesIdx + 200);
+    const types = [];
+    for (const t of TYPE_NAMES) {
+      if (new RegExp(`/assets/${t}-[a-f0-9]+\\.png`).test(slice)) {
+        types.push(t.charAt(0).toUpperCase() + t.slice(1));
+      }
+    }
+    if (types.length) detail.types = types;
+  }
+
+  // Supertype + subtypes: chips in the "Subtypes" block
+  const stIdx = html.indexOf('class="sr-only">Subtypes');
+  if (stIdx >= 0) {
+    const nextSection = html.indexOf('<div class="mt-', stIdx + 30);
+    const block = html.slice(stIdx, nextSection > stIdx ? nextSection : stIdx + 4000);
+    const chipRe = /<div class="border border-mono-2[^"]*"><div>([^<]+)<\/div>/g;
+    const chips = [];
+    let cm;
+    while ((cm = chipRe.exec(block)) !== null) {
+      chips.push(decodeHtmlEntities(cm[1]).trim());
+    }
+    if (chips.length > 0) {
+      detail.supertype = chips[0];
+      detail.subtypes = chips.slice(1);
+    }
+  }
+
+  return detail;
+}
+
 function summarize(series) {
   // Pick last non-null value as current; first non-null as start; min/max over period
   const points = (series.data || []).filter(p => p && p[1] != null);
@@ -87,13 +137,16 @@ export default async function handler(req, res) {
     }
 
     const variants = Object.keys(byVariantCompany);
+    const detail = extractCardDetail(html);
 
     res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=21600');
     return res.json({
       id, slug, variant, name,
       variants,
       byVariantCompany,
+      detail,
       hasData: variants.length > 0,
+      hasDetail: Object.keys(detail).length > 0,
     });
   } catch (err) {
     return res.status(500).json({ error: 'internal', message: String(err.message || err) });

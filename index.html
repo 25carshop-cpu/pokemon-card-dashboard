@@ -1412,6 +1412,63 @@ async function fetchScrydexCardPrices(card) {
 const SCRYDEX_COMPANIES = ['Raw', 'PSA', 'BGS', 'CGC', 'TAG', 'ACE', 'ARS', 'CCIC', 'AGS', 'SGC'];
 const SCRYDEX_SERIES_COLORS = ['#2F80ED', '#56CCF2', '#F2994A', '#EB5757'];
 
+// Capitalize: "fire" → "Fire"
+function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+
+// Map scrydex card detail → TCGdex-shaped card so existing renderers + facets work
+function scrydexDetailToTcgdexShape(card, detail) {
+  if (!detail) return card;
+  const types = Array.isArray(detail.types) ? detail.types.map(capitalize) : [];
+  const subtypes = Array.isArray(detail.subtypes) ? detail.subtypes : [];
+  return {
+    ...card,
+    name: card.name || detail.name || '',
+    hp: detail.hp || null,
+    types,
+    category: detail.supertype || card.category || null,
+    stage: subtypes[0] || null,
+    subtypes,
+    rarity: detail.rarity || null,
+    illustrator: detail.artist || null,
+    weaknesses: [],
+    resistances: [],
+  };
+}
+
+async function prefetchScrydexCardDetails(expId, onProgress) {
+  const cards = state.cardsByExp[expId] || [];
+  if (!cards.length) return;
+  state.cardDetails[expId] = state.cardDetails[expId] || [];
+  const existingIds = new Set(state.cardDetails[expId].map(c => c.id));
+  const todo = cards.filter(c => !existingIds.has(c.id));
+  if (!todo.length) return;
+
+  state.cardDetailsLoading = true;
+  let done = state.cardDetails[expId].length;
+  const total = cards.length;
+  if (onProgress) onProgress(done, total);
+
+  // Bounded concurrency to avoid overwhelming /api/scrydex-card and the upstream
+  const CONCURRENCY = 6;
+  let cursor = 0;
+  async function worker() {
+    while (cursor < todo.length) {
+      const card = todo[cursor++];
+      try {
+        const json = await fetchScrydexCardPrices(card);
+        const detail = json?.detail;
+        if (detail) {
+          state.cardDetails[expId].push(scrydexDetailToTcgdexShape(card, detail));
+        }
+      } catch {}
+      done++;
+      if (onProgress) onProgress(done, total);
+    }
+  }
+  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
+  state.cardDetailsLoading = false;
+}
+
 // English type → energy CSS class + Japanese label
 const TYPE_INFO = {
   'Grass':     { cls: 'energy-grass',     ja: '草',         emoji: '🌿' },
@@ -1793,19 +1850,6 @@ function renderFiltersPanel() {
   const facets = buildFacets(detailed);
 
   if (detailed.length === 0) {
-    const exp = state.expansions.find(e => e.id === state.selectedExpansion);
-    if (exp?.source === 'scrydex') {
-      $('#facetsContainer').innerHTML = `
-        <div class="facet-loading" style="text-align:left;line-height:1.5">
-          <strong style="color:var(--text)">Filters unavailable</strong>
-          <p style="font-size:11px;color:var(--text-dim);margin-top:6px">
-            This set comes from Scrydex — per-card metadata (rarity, type, illustrator) isn't fetched yet.
-            Use the search bar above the grid instead.
-          </p>
-        </div>
-      `;
-      return;
-    }
     $('#facetsContainer').innerHTML = `
       <div class="facet-loading">
         <span class="spinner" style="display:inline-block;width:14px;height:14px;border-width:2px;vertical-align:middle;margin-right:6px"></span>
@@ -2064,11 +2108,22 @@ async function selectExpansion(id) {
     }
     renderCards();
     renderFiltersPanel();
-    // Background-fetch full card details so filters work (skip for scrydex — TCGdex won't have them)
-    if (exp?.source !== 'scrydex') {
-      prefetchCardDetails(id, () => {
-        // Re-render filters panel periodically to update facets as data arrives
+    // Background-fetch full card details so filters work
+    if (exp?.source === 'scrydex') {
+      let lastRender = 0;
+      prefetchScrydexCardDetails(id, (done, total) => {
+        // Throttle re-renders so we don't thrash the DOM with 250 updates
+        const now = Date.now();
+        if (now - lastRender > 400 || done === total) {
+          lastRender = now;
+          renderFiltersPanel();
+        }
       }).then(() => {
+        renderFiltersPanel();
+        renderCards();
+      });
+    } else {
+      prefetchCardDetails(id, () => {}).then(() => {
         renderFiltersPanel();
         renderCards();
       });
