@@ -1334,6 +1334,7 @@ async function fetchScrydexSet(id) {
 }
 
 // Convert a TCGdex card id (e.g. "sv01-007") to scrydex format ("sv1-7").
+// Scrydex uses "pt" instead of "." for sub-set versions: me2.5 → me2pt5, sv8.5 → sv8pt5.
 // Already-scrydex ids (containing underscore, e.g. "m2a_ja-223") pass through.
 function tcgdexToScrydexId(cardId) {
   if (!cardId) return null;
@@ -1342,7 +1343,9 @@ function tcgdexToScrydexId(cardId) {
   if (idx < 0) return cardId;
   const setCode = cardId.slice(0, idx);
   const cardNum = cardId.slice(idx + 1);
-  const cleanedSet = setCode.replace(/^([a-z]+)0+(?=\d)/i, '$1');
+  const cleanedSet = setCode
+    .replace(/^([a-z]+)0+(?=\d)/i, '$1')
+    .replace(/\./g, 'pt');
   const cleanedNum = cardNum.replace(/^0+(?=\d)/, '');
   return `${cleanedSet}-${cleanedNum}`;
 }
