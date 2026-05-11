@@ -2639,11 +2639,19 @@ function renderCollectionTable(loading) {
 // =====================
 // WATCHLIST RENDERING
 // =====================
-const WATCHLIST_GRADES = ['PSA 9', 'PSA 10', 'BGS 9.5', 'BGS 10'];
+const WATCHLIST_GRADES = ['Any', 'PSA 9', 'PSA 10', 'BGS 9.5', 'BGS 10'];
 const WATCHLIST_LANGS = [
   { code: 'en', label: 'EN (US/EU)', flag: '🇺🇸' },
   { code: 'jp', label: 'JP', flag: '🇯🇵' },
 ];
+// Test functions for the watchlist grade rows ('Any' = all listings)
+const WATCHLIST_GRADE_TESTS = {
+  'Any':     () => true,
+  'PSA 9':   l => l.grading?.company === 'PSA' && l.grading?.grade === 9,
+  'PSA 10':  l => l.grading?.company === 'PSA' && l.grading?.grade === 10,
+  'BGS 9.5': l => l.grading?.company === 'BGS' && l.grading?.grade === 9.5,
+  'BGS 10':  l => l.grading?.company === 'BGS' && l.grading?.grade === 10,
+};
 
 async function fetchWatchlistPrices(item) {
   const setCode = (item.setId || '').toLowerCase();
@@ -2675,10 +2683,15 @@ async function fetchWatchlistPrices(item) {
 function statsForGradeLang(json, grade) {
   if (!json?.results) return null;
   const all = json.results.flatMap(r => r.listings || []);
-  const test = GRADE_TESTS[grade];
+  const test = WATCHLIST_GRADE_TESTS[grade] || GRADE_TESTS[grade];
   if (!test) return null;
   const matched = all.filter(test);
   return computeStats(matched);
+}
+
+function totalListings(json) {
+  if (!json?.results) return 0;
+  return json.results.reduce((s, r) => s + (r.listings?.length || 0), 0);
 }
 
 function buildWatchlistLinks(item) {
@@ -2731,6 +2744,23 @@ function renderWatchlistCard(item, idx, prices) {
   const links = buildWatchlistLinks(item);
   const imgUrlSrc = item.image ? `${item.image}/low.png` : '';
 
+  // Per-language listing summary (helps explain why cells are empty)
+  const summary = WATCHLIST_LANGS.map(lang => {
+    if (!prices) return `${lang.flag} <span style="color:var(--text-dim)">checking…</span>`;
+    const json = prices[lang.code];
+    const total = totalListings(json);
+    const error = json?.error;
+    if (error === 'expansion_not_found') return `${lang.flag} <span style="color:var(--text-dim)">set not on CardTrader</span>`;
+    if (total === 0) return `${lang.flag} <strong style="color:var(--orange)">0 listings</strong>`;
+    const all = json.results.flatMap(r => r.listings || []);
+    const graded = all.filter(l => l.grading || l.graded).length;
+    return `${lang.flag} <strong>${total}</strong> listings <span style="color:var(--text-dim)">· ${graded} graded</span>`;
+  }).join(' &nbsp;·&nbsp; ');
+
+  // Detect "no data anywhere" — show simpler card with verification links front and center
+  const hasAnyData = prices && WATCHLIST_LANGS.some(lang => totalListings(prices[lang.code]) > 0);
+  const noDataYet = prices && !hasAnyData;
+
   const priceCells = WATCHLIST_GRADES.map(grade => {
     const cells = WATCHLIST_LANGS.map(lang => {
       if (!prices) return `<td class="price-cell"><span class="loader">…</span></td>`;
@@ -2745,6 +2775,12 @@ function renderWatchlistCard(item, idx, prices) {
     return `<tr><td class="grade-cell">${escapeHtml(grade)}</td>${cells}</tr>`;
   }).join('');
 
+  const emptyBanner = noDataYet ? `
+    <div style="background:rgba(251,146,60,0.1);border:1px solid rgba(251,146,60,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--orange)">
+      ⚠ <strong>No CardTrader listings yet.</strong> Common for newly-released sets — sellers list later. Use the verification links below to check eBay sold / Yahoo Auctions / Yuyutei for actual market prices.
+    </div>
+  ` : '';
+
   return `
     <div class="watchlist-card" data-watchlist-card="${idx}">
       <div class="watchlist-card-header">
@@ -2755,11 +2791,13 @@ function renderWatchlistCard(item, idx, prices) {
             ${escapeHtml(item.setName)} · #${escapeHtml(item.localId)}${item.cardCount ? '/' + item.cardCount : ''}
             · <code style="background:var(--bg-dark);padding:1px 6px;border-radius:3px;font-size:10px">${escapeHtml((item.setId || '').toUpperCase())}-${escapeHtml(item.localId)}</code>
           </div>
+          <div class="watchlist-card-meta" style="margin-top:6px">📈 ${summary}</div>
         </div>
         <div class="watchlist-card-actions">
           <button type="button" class="icon-btn" data-watchlist-remove="${idx}" title="Remove from watchlist">×</button>
         </div>
       </div>
+      ${emptyBanner}
       <table class="watchlist-grade-table">
         <thead>
           <tr>
