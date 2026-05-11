@@ -167,6 +167,19 @@
   .panel-header .count { font-size: 12px; color: var(--text-dim); }
 
   .expansion-list { max-height: 70vh; overflow-y: auto; }
+  .series-section { }
+  .series-header {
+    padding: 12px 18px 8px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    color: var(--accent);
+    background: linear-gradient(90deg, rgba(255,203,5,0.08), transparent);
+    border-bottom: 1px solid var(--border);
+    border-top: 1px solid var(--border);
+    text-transform: uppercase;
+  }
+  .series-section:first-child .series-header { border-top: none; }
   .expansion-list::-webkit-scrollbar { width: 6px; }
   .expansion-list::-webkit-scrollbar-track { background: var(--bg-dark); }
   .expansion-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
@@ -425,11 +438,11 @@
     <div class="logo-icon"></div>
     <div>
       <h1>Pokémon Card Dashboard</h1>
-      <p>ภาษาญี่ปุ่น (JP) · ปี 2023–2026 · ดึงสดจาก TCGdex (ไม่ต้องใช้ API Key)</p>
+      <p>English · 2020–2026 · TCGdex card data + CardTrader pricing</p>
     </div>
   </div>
   <div class="header-meta">
-    <span class="badge" id="liveBadge"><span class="dot"></span>กำลังโหลด...</span>
+    <span class="badge" id="liveBadge"><span class="dot"></span>Loading...</span>
     <span id="lastUpdated"></span>
   </div>
 </div>
@@ -441,52 +454,52 @@
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
     </svg>
-    <input type="text" id="searchInput" placeholder="ค้นหาการ์ด (ชื่อ JP / ชื่อชุด)..." />
+    <input type="text" id="searchInput" placeholder="Search card or expansion..." />
   </div>
   <select id="typeFilter">
-    <option value="">ทุกประเภทพลังงาน</option>
-    <option value="Grass">🌿 草 (Grass)</option>
-    <option value="Fire">🔥 炎 (Fire)</option>
-    <option value="Water">💧 水 (Water)</option>
-    <option value="Lightning">⚡ 雷 (Lightning)</option>
-    <option value="Psychic">🔮 超 (Psychic)</option>
-    <option value="Fighting">✊ 闘 (Fighting)</option>
-    <option value="Darkness">🌑 悪 (Darkness)</option>
-    <option value="Metal">⚙ 鋼 (Metal)</option>
-    <option value="Fairy">✨ フェアリー (Fairy)</option>
-    <option value="Dragon">🐉 ドラゴン (Dragon)</option>
-    <option value="Colorless">○ 無 (Colorless)</option>
+    <option value="">All Energy Types</option>
+    <option value="Grass">🌿 Grass</option>
+    <option value="Fire">🔥 Fire</option>
+    <option value="Water">💧 Water</option>
+    <option value="Lightning">⚡ Lightning</option>
+    <option value="Psychic">🔮 Psychic</option>
+    <option value="Fighting">✊ Fighting</option>
+    <option value="Darkness">🌑 Darkness</option>
+    <option value="Metal">⚙ Metal</option>
+    <option value="Fairy">✨ Fairy</option>
+    <option value="Dragon">🐉 Dragon</option>
+    <option value="Colorless">○ Colorless</option>
   </select>
   <select id="sortBy">
-    <option value="number">เรียงตามเลขการ์ด</option>
-    <option value="name">เรียงตามชื่อ</option>
-    <option value="rarity">เรียงตาม Rarity</option>
+    <option value="number">Sort by Number</option>
+    <option value="name">Sort by Name</option>
+    <option value="rarity">Sort by Rarity</option>
   </select>
-  <button class="btn btn-primary" id="resetBtn">รีเซ็ต</button>
-  <button class="btn" id="refreshBtn" title="ล้าง cache แล้วดึงข้อมูลใหม่">↻ Refresh</button>
+  <button class="btn btn-primary" id="resetBtn">Reset</button>
+  <button class="btn" id="refreshBtn" title="Clear cache and fetch fresh data">↻ Refresh</button>
 </div>
 
 <div class="layout">
   <div class="panel">
     <div class="panel-header">
-      <h2>Expansions (2023–2026)</h2>
+      <h2>Expansions (2020–2026)</h2>
       <span class="count" id="expCount"></span>
     </div>
     <div class="expansion-list" id="expansionList">
-      <div class="loading-state"><div class="spinner"></div><p>กำลังโหลดชุดการ์ด...</p></div>
+      <div class="loading-state"><div class="spinner"></div><p>Loading expansions...</p></div>
     </div>
   </div>
 
   <div class="panel">
     <div class="panel-header">
-      <h2 id="cardsTitle">เลือกชุดการ์ด</h2>
+      <h2 id="cardsTitle">Select an expansion</h2>
       <span class="count" id="cardsCount"></span>
     </div>
     <div id="cardsContainer">
       <div class="empty-state">
         <div class="icon">🎴</div>
-        <h3>เลือกชุดจากด้านซ้าย</h3>
-        <p>เพื่อดูการ์ดทั้งหมดในชุดนั้น</p>
+        <h3>Select an expansion from the left</h3>
+        <p>to see all cards in that set</p>
       </div>
     </div>
   </div>
@@ -500,17 +513,23 @@
 </div>
 
 <div class="footer">
-  <p>Live data จาก <a href="https://tcgdex.dev/" target="_blank">TCGdex API</a> · กรองเฉพาะ Series Scarlet & Violet + Mega ที่ออกปี 2023–2026 · ภาษาญี่ปุ่น</p>
-  <p style="margin-top: 6px; font-size: 11px;">หมายเหตุ: TCGdex มักไม่มีข้อมูลราคาสำหรับการ์ดญี่ปุ่น (TCGplayer/Cardmarket ขายแต่การ์ด EN/EU)</p>
+  <p>Card data: <a href="https://tcgdex.dev/" target="_blank">TCGdex API</a> · Pricing: <a href="https://www.cardtrader.com/" target="_blank">CardTrader</a> · Series: Sword & Shield + Scarlet & Violet + Mega Evolution (2020–2026) · English</p>
+  <p style="margin-top: 6px; font-size: 11px;">Note: TCGdex pricing comes from TCGplayer (USD) and Cardmarket (EUR) — best coverage for English/EU cards</p>
 </div>
 
 <script>
 // =====================
 // CONFIG
 // =====================
-const API_BASE = 'https://api.tcgdex.net/v2/ja';
-const SERIES_TO_INCLUDE = ['SV', 'M']; // Scarlet & Violet (2023+) + Mega (2025+)
-const YEAR_MIN = 2023;
+const API_BASE = 'https://api.tcgdex.net/v2/en';
+const CARD_LANGUAGE = 'en'; // for CardTrader price filter
+// Series shown in sidebar (newest first). Each becomes a section header.
+const SERIES_TO_INCLUDE = [
+  { id: 'me',   label: 'Mega Evolution' },
+  { id: 'sv',   label: 'Scarlet & Violet' },
+  { id: 'swsh', label: 'Sword & Shield' },
+];
+const YEAR_MIN = 2020;
 const YEAR_MAX = 2026;
 
 // English type → energy CSS class + Japanese label
@@ -636,12 +655,12 @@ function renderStats() {
     <div class="stat">
       <div class="stat-label">Expansions</div>
       <div class="stat-value">${totalExp}</div>
-      <div class="stat-meta">ปี ${YEAR_MIN}–${YEAR_MAX} · ภาษาญี่ปุ่น</div>
+      <div class="stat-meta">${YEAR_MIN}–${YEAR_MAX} · English</div>
     </div>
     <div class="stat">
-      <div class="stat-label">Cards (รวม)</div>
+      <div class="stat-label">Total Cards</div>
       <div class="stat-value">${totalCards.toLocaleString()}</div>
-      <div class="stat-meta">นับจากทุกชุด</div>
+      <div class="stat-meta">across all sets</div>
     </div>
     <div class="stat">
       <div class="stat-label">Series</div>
@@ -658,37 +677,50 @@ function renderStats() {
 
 function renderExpansionList() {
   const q = state.search.toLowerCase();
-  const sorted = [...state.expansions].sort((a, b) => String(b.releaseDate || '').localeCompare(String(a.releaseDate || '')));
-  const filtered = sorted.filter(e => {
+  const filtered = state.expansions.filter(e => {
     if (!q) return true;
     return (e.name || '').toLowerCase().includes(q)
       || (e.serieName || '').toLowerCase().includes(q)
       || (e.id || '').toLowerCase().includes(q);
   });
-  $('#expCount').textContent = `${filtered.length} ชุด`;
+  $('#expCount').textContent = `${filtered.length} sets`;
 
   if (filtered.length === 0) {
-    $('#expansionList').innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>ไม่พบชุดที่ค้นหา</p></div>';
+    $('#expansionList').innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>No sets match your search</p></div>';
     return;
   }
 
-  $('#expansionList').innerHTML = filtered.map(e => {
-    const logoUrl = e.logo ? `${e.logo}.png` : (e.symbol ? `${e.symbol}.png` : null);
-    return `
-      <div class="expansion ${state.selectedExpansion === e.id ? 'active' : ''}" data-id="${escapeHtml(e.id)}">
-        <div class="exp-logo">
-          ${logoUrl
-            ? `<img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(e.id)}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${escapeHtml(e.id)}'}))">`
-            : escapeHtml(e.id)}
-        </div>
-        <div class="exp-info">
-          <div class="exp-name">${escapeHtml(e.name)}</div>
-          <div class="exp-meta">${escapeHtml(e.serieName || '')} · ${escapeHtml(e.releaseDate || '?')}</div>
-        </div>
-        <div class="exp-count">${e.cardCount?.official || ''}</div>
-      </div>
-    `;
-  }).join('');
+  // Group by series, preserving SERIES_TO_INCLUDE order
+  const groups = SERIES_TO_INCLUDE.map(s => ({
+    id: s.id,
+    label: s.label,
+    sets: filtered
+      .filter(e => e.serieId === s.id)
+      .sort((a, b) => String(b.releaseDate || '').localeCompare(String(a.releaseDate || ''))),
+  })).filter(g => g.sets.length > 0);
+
+  $('#expansionList').innerHTML = groups.map(group => `
+    <div class="series-section">
+      <div class="series-header">${escapeHtml(group.label.toUpperCase())}</div>
+      ${group.sets.map(e => {
+        const logoUrl = e.logo ? `${e.logo}.png` : (e.symbol ? `${e.symbol}.png` : null);
+        return `
+          <div class="expansion ${state.selectedExpansion === e.id ? 'active' : ''}" data-id="${escapeHtml(e.id)}">
+            <div class="exp-logo">
+              ${logoUrl
+                ? `<img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(e.id)}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${escapeHtml(e.id.toUpperCase())}'}))">`
+                : escapeHtml(e.id.toUpperCase())}
+            </div>
+            <div class="exp-info">
+              <div class="exp-name">${escapeHtml(e.name)}</div>
+              <div class="exp-meta">${escapeHtml(e.releaseDate || '?')}</div>
+            </div>
+            <div class="exp-count">${e.cardCount?.official || ''}</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `).join('');
 
   document.querySelectorAll('.expansion').forEach(el => {
     el.addEventListener('click', () => selectExpansion(el.dataset.id));
@@ -699,8 +731,8 @@ async function selectExpansion(id) {
   state.selectedExpansion = id;
   renderExpansionList();
   const exp = state.expansions.find(e => e.id === id);
-  $('#cardsTitle').textContent = exp ? exp.name : 'การ์ดในชุด';
-  $('#cardsContainer').innerHTML = '<div class="loading-state"><div class="spinner"></div><p>กำลังโหลดการ์ด...</p></div>';
+  $('#cardsTitle').textContent = exp ? exp.name : 'Cards';
+  $('#cardsContainer').innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Loading cards...</p></div>';
   $('#cardsCount').textContent = '';
 
   try {
@@ -711,7 +743,7 @@ async function selectExpansion(id) {
     }
     renderCards();
   } catch (err) {
-    $('#cardsContainer').innerHTML = `<div class="error-state"><div class="icon">⚠</div><h3>โหลดการ์ดไม่สำเร็จ</h3><p>${escapeHtml(err.message)}</p></div>`;
+    $('#cardsContainer').innerHTML = `<div class="error-state"><div class="icon">⚠</div><h3>Failed to load cards</h3><p>${escapeHtml(err.message)}</p></div>`;
   }
 }
 
@@ -736,10 +768,10 @@ function renderCards() {
     cards.sort((a, b) => (parseInt(a.localId, 10) || 0) - (parseInt(b.localId, 10) || 0));
   }
 
-  $('#cardsCount').textContent = `${cards.length} ใบ`;
+  $('#cardsCount').textContent = `${cards.length} cards`;
 
   if (cards.length === 0) {
-    $('#cardsContainer').innerHTML = `<div class="empty-state"><div class="icon">🔍</div><h3>ไม่พบการ์ด</h3><p>ลองเปลี่ยน filter หรือคำค้นหา</p></div>`;
+    $('#cardsContainer').innerHTML = `<div class="empty-state"><div class="icon">🔍</div><h3>No cards found</h3><p>Try changing filters or search</p></div>`;
     return;
   }
 
@@ -768,7 +800,7 @@ function renderCards() {
 
 async function openCardModal(id) {
   $('#modal').classList.add('show');
-  $('#modalBody').innerHTML = '<div class="loading-state"><div class="spinner"></div><p>กำลังโหลดข้อมูลการ์ด...</p></div>';
+  $('#modalBody').innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Loading card details...</p></div>';
 
   try {
     const card = await apiGet(`/cards/${id}`, `card:${id}`, 3600);
@@ -778,7 +810,7 @@ async function openCardModal(id) {
     $('#modalBody').innerHTML = `
       <div class="error-state">
         <div class="icon">⚠</div>
-        <h3>โหลดข้อมูลไม่สำเร็จ</h3>
+        <h3>Failed to load card</h3>
         <p>${escapeHtml(err.message)}</p>
       </div>
     `;
@@ -842,23 +874,23 @@ function renderCardModal(card) {
       </div>
     </div>
 
-    ${attacksHtml ? `<div class="modal-section"><h3>ワザ (Attacks)</h3>${attacksHtml}</div>` : ''}
+    ${attacksHtml ? `<div class="modal-section"><h3>Attacks</h3>${attacksHtml}</div>` : ''}
 
     ${(weaknessesHtml || resistancesHtml || card.retreat != null) ? `
       <div class="modal-section">
-        <h3>弱点・抵抗・にげる</h3>
-        <div class="info-row"><span class="label">弱点</span><span class="value"><div class="chip-row">${weaknessesHtml || '-'}</div></span></div>
-        ${resistancesHtml ? `<div class="info-row" style="margin-top:8px;"><span class="label">抵抗</span><span class="value"><div class="chip-row">${resistancesHtml}</div></span></div>` : ''}
-        ${card.retreat != null ? `<div class="info-row" style="margin-top:8px;"><span class="label">にげる</span><span class="value"><div class="chip-row">${Array(card.retreat).fill(0).map(()=>`<div class="energy-dot energy-colorless">○</div>`).join('') || '0'}</div></span></div>` : ''}
+        <h3>Weakness · Resistance · Retreat</h3>
+        <div class="info-row"><span class="label">Weakness</span><span class="value"><div class="chip-row">${weaknessesHtml || '-'}</div></span></div>
+        ${resistancesHtml ? `<div class="info-row" style="margin-top:8px;"><span class="label">Resistance</span><span class="value"><div class="chip-row">${resistancesHtml}</div></span></div>` : ''}
+        ${card.retreat != null ? `<div class="info-row" style="margin-top:8px;"><span class="label">Retreat</span><span class="value"><div class="chip-row">${Array(card.retreat).fill(0).map(()=>`<div class="energy-dot energy-colorless">○</div>`).join('') || '0'}</div></span></div>` : ''}
       </div>
     ` : ''}
 
     <div class="modal-section">
-      <h3>Market Pricing — CardTrader 🌍 (JP cards)</h3>
+      <h3>Market Pricing — CardTrader 🌍 (EN cards)</h3>
       <div id="cardtraderPricing">
         <div class="loading-state" style="padding:20px">
           <div class="spinner"></div>
-          <p>กำลังดึงราคาจาก CardTrader (ตลาดยุโรป)...</p>
+          <p>Fetching prices from CardTrader (EU market)...</p>
         </div>
       </div>
     </div>
@@ -906,21 +938,28 @@ async function loadCardTraderPrice(card) {
   currentPricingFilter = 'all';
   currentPricingData = null;
   const expCode = (card.set?.id || '').toLowerCase();
+  const expName = card.set?.name || '';
   const collectorNumber = card.localId || '';
-  if (!expCode || !collectorNumber) {
-    target.innerHTML = '<div class="pricing-empty">ขาดข้อมูล set / collector number</div>';
+  if ((!expCode && !expName) || !collectorNumber) {
+    target.innerHTML = '<div class="pricing-empty">Missing set / collector number</div>';
     return;
   }
-  const cacheKey = `ct:${expCode}:${collectorNumber}`;
+  const cacheKey = `ct:${CARD_LANGUAGE}:${expCode}:${collectorNumber}`;
   let json = cacheGet(cacheKey);
   if (!json) {
     try {
-      const res = await fetch(`/api/price?expansion_code=${encodeURIComponent(expCode)}&collector_number=${encodeURIComponent(collectorNumber)}`);
+      const params = new URLSearchParams({
+        expansion_code: expCode,
+        expansion_name: expName,
+        collector_number: collectorNumber,
+        language: CARD_LANGUAGE,
+      });
+      const res = await fetch(`/api/price?${params}`);
       json = await res.json();
       if (!res.ok) {
         target.innerHTML = `
           <div class="pricing-empty">
-            <strong>${json.error === 'missing_credentials' ? '⚠ ยังไม่ได้ตั้ง CARDTRADER_TOKEN' : 'ดึงราคาไม่สำเร็จ'}</strong>
+            <strong>${json.error === 'missing_credentials' ? '⚠ CARDTRADER_TOKEN not set' : 'Failed to fetch price'}</strong>
             <p style="margin-top:6px;font-size:12px">${escapeHtml(json.message || `HTTP ${res.status}`)}</p>
           </div>
         `;
@@ -928,7 +967,7 @@ async function loadCardTraderPrice(card) {
       }
       cacheSet(cacheKey, json, 600);
     } catch (err) {
-      target.innerHTML = `<div class="pricing-empty">เครือข่ายมีปัญหา: ${escapeHtml(err.message)}</div>`;
+      target.innerHTML = `<div class="pricing-empty">Network error: ${escapeHtml(err.message)}</div>`;
       return;
     }
   }
@@ -940,9 +979,9 @@ let currentPricingData = null;
 let currentPricingFilter = 'all';
 
 const PRICING_FILTERS = [
-  { id: 'all',     label: 'ทั้งหมด',  test: () => true },
-  { id: 'raw',     label: 'Raw (ไม่เกรด)', test: l => !l.graded && !l.grading },
-  { id: 'graded',  label: 'Graded ทั้งหมด', test: l => l.graded || !!l.grading },
+  { id: 'all',     label: 'All',     test: () => true },
+  { id: 'raw',     label: 'Raw (ungraded)', test: l => !l.graded && !l.grading },
+  { id: 'graded',  label: 'All Graded', test: l => l.graded || !!l.grading },
   { id: 'psa10',   label: 'PSA 10',  test: l => l.grading?.company === 'PSA' && l.grading?.grade === 10 },
   { id: 'psa9up',  label: 'PSA 9+',  test: l => l.grading?.company === 'PSA' && l.grading?.grade >= 9 },
   { id: 'bgs10',   label: 'BGS 10/9.5', test: l => l.grading?.company === 'BGS' && l.grading?.grade >= 9.5 },
@@ -981,8 +1020,8 @@ function renderPricingWithFilter(target) {
   if (results.length === 0) {
     target.innerHTML = `
       <div class="pricing-empty">
-        ยังไม่มี seller บน CardTrader ขายการ์ดใบนี้ (JP)
-        <p style="margin-top:6px;font-size:11px">ลองเช็คใน Yuyutei / Mercari JP สำหรับราคาตลาดญี่ปุ่นโดยตรง</p>
+        No sellers on CardTrader for this card (EN)
+        <p style="margin-top:6px;font-size:11px">Try TCGplayer or eBay for direct US/EU market prices</p>
       </div>
     `;
     return;
@@ -1020,7 +1059,7 @@ function renderPricingWithFilter(target) {
           <div style="font-size:12px;color:var(--text-dim);margin-bottom:4px">
             ${escapeHtml(r.name_en)} ${r.version ? '· ' + escapeHtml(r.version) : ''}
           </div>
-          <div class="pricing-empty">ไม่มี listing ที่ตรงกับ filter "${escapeHtml(activeFilter.label)}"</div>
+          <div class="pricing-empty">No listings match filter "${escapeHtml(activeFilter.label)}"</div>
         </div>
       `;
     }
@@ -1106,7 +1145,7 @@ $('#typeFilter').addEventListener('change', e => {
   state.typeFilter = e.target.value;
   if (state.selectedExpansion) renderCards();
   if (state.typeFilter) {
-    alert('หมายเหตุ: ฟิลเตอร์ประเภทพลังงานต้องคลิกการ์ดดูทีละใบเพื่อดึง type — ในมุมมอง grid ยังไม่กรองได้');
+    alert('Note: Energy type filter only works on opened card details — grid view does not filter by type');
   }
 });
 $('#sortBy').addEventListener('change', e => {
@@ -1120,11 +1159,11 @@ $('#resetBtn').addEventListener('click', () => {
   if (state.selectedExpansion) renderCards();
 });
 $('#refreshBtn').addEventListener('click', async () => {
-  if (!confirm('ล้าง cache แล้วดึงข้อมูลใหม่ทั้งหมด? อาจใช้เวลาสักครู่')) return;
+  if (!confirm('Clear cache and re-fetch everything? May take a moment.')) return;
   cacheClear();
   state.cardsByExp = {};
   state.selectedExpansion = null;
-  $('#cardsContainer').innerHTML = '<div class="empty-state"><div class="icon">🎴</div><h3>เลือกชุดจากด้านซ้าย</h3></div>';
+  $('#cardsContainer').innerHTML = '<div class="empty-state"><div class="icon">🎴</div><h3>Select an expansion from the left</h3></div>';
   await init();
 });
 $('#modalClose').addEventListener('click', () => $('#modal').classList.remove('show'));
@@ -1136,7 +1175,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') $('#modal').
 // =====================
 async function init() {
   $('#liveBadge').className = 'badge';
-  $('#liveBadge').innerHTML = '<span class="dot"></span>กำลังเชื่อมต่อ TCGdex...';
+  $('#liveBadge').innerHTML = '<span class="dot"></span>Connecting to TCGdex...';
 
   try {
     // Load each series in parallel, gather sets with releaseDate
@@ -1147,7 +1186,7 @@ async function init() {
       $('#expansionList').innerHTML = `
         <div class="loading-state">
           <div class="spinner"></div>
-          <h3>กำลังโหลดชุดการ์ด</h3>
+          <h3>Loading expansions</h3>
           <p>${doneSets} / ${totalSets} (${pct}%)</p>
           <div class="progress-bar"><div style="width:${pct}%"></div></div>
         </div>
@@ -1156,7 +1195,8 @@ async function init() {
 
     // First pre-fetch series to know totals
     const seriesData = await Promise.all(
-      SERIES_TO_INCLUDE.map(id => apiGet(`/series/${id}`, `series:${id}`, 86400))
+      SERIES_TO_INCLUDE.map(s => apiGet(`/series/${s.id}`, `series:${s.id}`, 86400)
+        .then(data => ({ ...data, configId: s.id, configLabel: s.label })))
     );
     totalSets = seriesData.reduce((s, sr) => s + (sr.sets?.length || 0), 0);
     updateProgress();
@@ -1168,7 +1208,7 @@ async function init() {
           const detail = await apiGet(`/sets/${s.id}`, `set:${s.id}`, 86400);
           doneSets++;
           updateProgress();
-          return { ...s, ...detail, serieName: sr.name, serieId: sr.id };
+          return { ...s, ...detail, serieName: sr.configLabel, serieId: sr.configId };
         } catch {
           doneSets++;
           updateProgress();
@@ -1185,7 +1225,7 @@ async function init() {
     });
 
     $('#liveBadge').className = 'badge';
-    $('#liveBadge').innerHTML = '<span class="dot"></span>Live (TCGdex)';
+    $('#liveBadge').innerHTML = '<span class="dot"></span>Live · TCGdex';
     renderStats();
     renderExpansionList();
   } catch (err) {
@@ -1195,14 +1235,14 @@ async function init() {
     $('#expansionList').innerHTML = `
       <div class="error-state">
         <div class="icon">⚠</div>
-        <h3>โหลดข้อมูลไม่สำเร็จ</h3>
+        <h3>Failed to load data</h3>
         <p>${escapeHtml(err.message)}</p>
       </div>
     `;
   }
 }
 
-$('#lastUpdated').textContent = 'อัปเดต: ' + new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
+$('#lastUpdated').textContent = 'Updated: ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 init();
 </script>
 </body>

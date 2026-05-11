@@ -28,15 +28,45 @@ async function getExpansionMap(token) {
     return expansionMapCache;
   }
   const all = await ctFetch('/expansions', token);
-  const map = {};
+  const byCode = {};
+  const byName = {};
   for (const e of all) {
     if (e.game_id === POKEMON_GAME_ID && e.code) {
-      map[e.code.toLowerCase()] = { id: e.id, name: e.name, code: e.code };
+      const entry = { id: e.id, name: e.name, code: e.code };
+      byCode[e.code.toLowerCase()] = entry;
+      byName[normalizeName(e.name)] = entry;
     }
   }
-  expansionMapCache = map;
+  expansionMapCache = { byCode, byName };
   expansionMapCacheAt = Date.now();
-  return map;
+  return expansionMapCache;
+}
+
+function normalizeName(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function findExpansion(map, { code, name }) {
+  if (code) {
+    const c = code.toLowerCase();
+    if (map.byCode[c]) return map.byCode[c];
+    // Try without trailing letter (sv10.5w → sv10)
+    const trimmed = c.replace(/\.\d+[a-z]?$/, '').replace(/[a-z]$/, '');
+    if (trimmed !== c && map.byCode[trimmed]) return map.byCode[trimmed];
+  }
+  if (name) {
+    const n = normalizeName(name);
+    if (map.byName[n]) return map.byName[n];
+    // Try fuzzy match: contains
+    for (const [key, entry] of Object.entries(map.byName)) {
+      if (key === n || key.includes(n) || n.includes(key)) return entry;
+    }
+  }
+  return null;
 }
 
 async function getBlueprints(expansionId, token) {
@@ -98,21 +128,23 @@ export default async function handler(req, res) {
   }
 
   const expansionCode = String(req.query.expansion_code || '').toLowerCase().trim();
+  const expansionName = String(req.query.expansion_name || '').trim();
   const collectorNumber = String(req.query.collector_number || '').trim();
-  if (!expansionCode || !collectorNumber) {
+  const language = (String(req.query.language || 'jp').toLowerCase().trim()) || 'jp';
+  if ((!expansionCode && !expansionName) || !collectorNumber) {
     return res.status(400).json({
       error: 'missing_param',
-      message: 'ต้องระบุ ?expansion_code=<code>&collector_number=<num>'
+      message: 'ต้องระบุ ?expansion_code=<code> หรือ ?expansion_name=<name> + ?collector_number=<num>'
     });
   }
 
   try {
     const map = await getExpansionMap(token);
-    const expansion = map[expansionCode];
+    const expansion = findExpansion(map, { code: expansionCode, name: expansionName });
     if (!expansion) {
       return res.status(404).json({
         error: 'expansion_not_found',
-        message: `CardTrader ไม่มี expansion code "${expansionCode}" ในเกม Pokemon`
+        message: `CardTrader ไม่มี expansion ที่ตรงกับ code="${expansionCode}" name="${expansionName}"`
       });
     }
 
@@ -135,7 +167,7 @@ export default async function handler(req, res) {
     const result = top.map((bp, i) => {
       const market = marketResponses[i] || {};
       const raw = (market[String(bp.id)] || []).filter(l =>
-        l.properties_hash?.pokemon_language === 'jp'
+        l.properties_hash?.pokemon_language === language
       );
 
       const enriched = raw
