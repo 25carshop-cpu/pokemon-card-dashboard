@@ -1278,6 +1278,31 @@ const ALL_SERIES_CATALOG = [
 // Series loaded by default
 const DEFAULT_SERIES = ['me', 'sv', 'swsh'];
 
+// Synthetic sets sourced from scrydex.com (not in TCGdex). Card data is scraped
+// server-side via /api/scrydex; pricing reuses the existing CardTrader/eBay pipeline.
+const SCRYDEX_SETS = [
+  { id: 'm4_ja',  slug: 'ninja-spinner',  name: 'Ninja Spinner',  serieId: 'me', serieName: 'Mega Evolution', releaseDate: '2026-02-13', cardCount: { official: 120 } },
+  { id: 'm3_ja',  slug: 'nihil-zero',     name: 'Nihil Zero',     serieId: 'me', serieName: 'Mega Evolution', releaseDate: '2026-01-23', cardCount: { official: 117 } },
+  { id: 'm2a_ja', slug: 'mega-dream-ex',  name: 'MEGA Dream ex',  serieId: 'me', serieName: 'Mega Evolution', releaseDate: '2025-11-21', cardCount: { official: 250 } },
+];
+
+function injectScrydexSets() {
+  for (const s of SCRYDEX_SETS) {
+    if (state.expansions.find(x => x.id === s.id)) continue;
+    state.expansions.push({ ...s, logo: null, symbol: null, source: 'scrydex' });
+  }
+}
+
+async function fetchScrydexSet(id) {
+  const cached = cacheGet(`scrydex:${id}`);
+  if (cached) return cached;
+  const res = await fetch(`/api/scrydex?id=${encodeURIComponent(id)}`);
+  if (!res.ok) throw new Error(`Scrydex HTTP ${res.status}`);
+  const json = await res.json();
+  cacheSet(`scrydex:${id}`, json, 86400);
+  return json;
+}
+
 // English type → energy CSS class + Japanese label
 const TYPE_INFO = {
   'Grass':     { cls: 'energy-grass',     ja: '草',         emoji: '🌿' },
@@ -1363,6 +1388,11 @@ function escapeHtml(s) {
 }
 function imgUrl(base, quality = 'high', ext = 'png') {
   if (!base) return null;
+  // Scrydex image URLs use size suffix without an extension: /small, /medium
+  if (typeof base === 'string' && base.includes('images.scrydex.com')) {
+    const size = quality === 'low' ? 'small' : 'medium';
+    return `${base}/${size}`;
+  }
   return `${base}/${quality}.${ext}`;
 }
 function typeInfo(t) { return TYPE_INFO[t] || { cls: 'energy-colorless', ja: t || '?', emoji: '○' }; }
@@ -1828,15 +1858,12 @@ function renderExpansionList() {
     return;
   }
 
-  // Sets to promote as their own series-level group (matched by name, case-insensitive)
-  const PROMOTED_SET_NAMES = ['Ninja Spinner', 'Nihil Zero', 'MEGA Dream ex'];
-  const promotedKeys = new Set(PROMOTED_SET_NAMES.map(n => n.trim().toLowerCase()));
-  const setKey = e => (e.name || '').trim().toLowerCase();
-
-  const promotedGroups = PROMOTED_SET_NAMES
-    .map(name => {
-      const set = filtered.find(e => setKey(e) === name.trim().toLowerCase());
-      return set ? { id: `__promo:${name}`, label: name, sets: [set] } : null;
+  // Sets to promote as their own series-level group (matched by set id)
+  const promotedIds = new Set(SCRYDEX_SETS.map(s => s.id));
+  const promotedGroups = SCRYDEX_SETS
+    .map(s => {
+      const set = filtered.find(e => e.id === s.id);
+      return set ? { id: `__promo:${s.id}`, label: s.name, sets: [set] } : null;
     })
     .filter(Boolean);
 
@@ -1847,7 +1874,7 @@ function renderExpansionList() {
       id: s.id,
       label: s.label,
       sets: filtered
-        .filter(e => e.serieId === s.id && !promotedKeys.has(setKey(e)))
+        .filter(e => e.serieId === s.id && !promotedIds.has(e.id))
         .sort((a, b) => String(b.releaseDate || '').localeCompare(String(a.releaseDate || ''))),
     }))
     .filter(g => g.sets.length > 0);
@@ -1897,19 +1924,33 @@ async function selectExpansion(id) {
 
   try {
     if (!state.cardsByExp[id]) {
-      // Cards are already in the set detail (cached)
-      const set = exp || await apiGet(`/sets/${id}`, `set:${id}`);
-      state.cardsByExp[id] = set.cards || [];
+      if (exp?.source === 'scrydex') {
+        const data = await fetchScrydexSet(id);
+        state.cardsByExp[id] = (data.cards || []).map(c => ({
+          id: c.id,
+          name: c.name,
+          localId: c.localId,
+          image: c.image,
+          source: 'scrydex',
+          set: { id: exp.id, name: exp.name, cardCount: exp.cardCount },
+        }));
+      } else {
+        // Cards are already in the set detail (cached)
+        const set = exp || await apiGet(`/sets/${id}`, `set:${id}`);
+        state.cardsByExp[id] = set.cards || [];
+      }
     }
     renderCards();
     renderFiltersPanel();
-    // Background-fetch full card details so filters work
-    prefetchCardDetails(id, () => {
-      // Re-render filters panel periodically to update facets as data arrives
-    }).then(() => {
-      renderFiltersPanel();
-      renderCards();
-    });
+    // Background-fetch full card details so filters work (skip for scrydex — TCGdex won't have them)
+    if (exp?.source !== 'scrydex') {
+      prefetchCardDetails(id, () => {
+        // Re-render filters panel periodically to update facets as data arrives
+      }).then(() => {
+        renderFiltersPanel();
+        renderCards();
+      });
+    }
   } catch (err) {
     $('#cardsContainer').innerHTML = `<div class="error-state"><div class="icon">⚠</div><h3>Failed to load cards</h3><p>${escapeHtml(err.message)}</p></div>`;
   }
@@ -2031,6 +2072,14 @@ function renderCardsTableView(cards, expCount) {
 async function openCardModal(id) {
   $('#modal').classList.add('show');
   $('#modalBody').innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Loading card details...</p></div>';
+
+  // Scrydex cards aren't in TCGdex — render directly from the data we already have
+  const localCard = (state.cardsByExp[state.selectedExpansion] || []).find(c => c.id === id);
+  if (localCard?.source === 'scrydex') {
+    renderCardModal(localCard);
+    loadCardTraderPrice(localCard);
+    return;
+  }
 
   try {
     const card = await apiGet(`/cards/${id}`, `card:${id}`, 3600);
@@ -2658,12 +2707,12 @@ function renderCollectionTable(loading) {
       : '—';
 
     const isRaw = item.targetGrade === 'Raw';
-    const imgUrl = item.image ? `${item.image}/low.png` : '';
+    const imgSrc = imgUrl(item.image, 'low') || '';
 
     return `
       <tr data-idx="${idx}">
         <td class="col-img">
-          ${imgUrl ? `<img src="${escapeHtml(imgUrl)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
+          ${imgSrc ? `<img src="${escapeHtml(imgSrc)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
         </td>
         <td class="col-name">
           <div style="font-weight:700">${escapeHtml(item.name)}</div>
@@ -2880,7 +2929,7 @@ async function renderWatchlist() {
 
 function renderWatchlistCard(item, idx, prices) {
   const links = buildWatchlistLinks(item);
-  const imgUrlSrc = item.image ? `${item.image}/low.png` : '';
+  const imgUrlSrc = imgUrl(item.image, 'low') || '';
 
   // Per-source listing summary
   const summary = WATCHLIST_LANGS.map(lang => {
@@ -3630,8 +3679,11 @@ async function init() {
       state.loadedSeries.add(seriesId);
     }));
 
+    // Inject Scrydex-sourced JP sets that TCGdex doesn't carry
+    injectScrydexSets();
+
     $('#liveBadge').className = 'badge';
-    $('#liveBadge').innerHTML = '<span class="dot"></span>Live · TCGdex';
+    $('#liveBadge').innerHTML = '<span class="dot"></span>Live · TCGdex + Scrydex';
     renderStats();
     renderExpansionList();
   } catch (err) {
