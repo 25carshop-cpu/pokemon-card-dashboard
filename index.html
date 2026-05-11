@@ -555,6 +555,113 @@
   .add-collection-form .btn-add:hover { filter: brightness(1.1); }
   .add-collection-form .btn-add.added { background: var(--text-dim); cursor: default; }
 
+  /* Scan card (OCR) */
+  .scan-btn {
+    background: linear-gradient(135deg, var(--accent), #ff8a00);
+    color: #1a1a1a;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: inherit;
+    transition: filter .15s ease;
+  }
+  .scan-btn:hover { filter: brightness(1.1); }
+  .scan-modal-body { padding: 4px 0; }
+  .scan-dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 30px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all .15s ease;
+    background: var(--bg-card-2);
+  }
+  .scan-dropzone:hover, .scan-dropzone.dragover {
+    border-color: var(--accent);
+    background: rgba(255,203,5,0.05);
+  }
+  .scan-dropzone .icon { font-size: 48px; margin-bottom: 10px; opacity: 0.6; }
+  .scan-dropzone p { color: var(--text-dim); font-size: 13px; }
+  .scan-dropzone .hint { font-size: 11px; margin-top: 6px; opacity: 0.7; }
+  .scan-buttons { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .scan-buttons button { flex: 1; min-width: 140px; }
+  .scan-preview {
+    margin-top: 14px;
+    text-align: center;
+  }
+  .scan-preview img {
+    max-width: 100%;
+    max-height: 280px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .scan-status {
+    margin-top: 14px;
+    padding: 10px 14px;
+    background: var(--bg-card-2);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .scan-results {
+    margin-top: 16px;
+  }
+  .scan-results h4 {
+    font-size: 13px;
+    color: var(--accent);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .scan-result-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+  }
+  .scan-result {
+    background: var(--bg-card-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px;
+    cursor: pointer;
+    transition: all .15s ease;
+  }
+  .scan-result:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+  .scan-result img {
+    width: 100%;
+    aspect-ratio: 0.72;
+    object-fit: cover;
+    border-radius: 4px;
+    margin-bottom: 6px;
+  }
+  .scan-result-name { font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .scan-result-meta { font-size: 10px; color: var(--text-dim); }
+  .scan-text-box {
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--text-dim);
+    max-height: 80px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    font-family: ui-monospace, monospace;
+  }
+
   /* Filters panel (right column for cards) */
   .filters-panel {
     background: var(--bg-card);
@@ -918,12 +1025,44 @@
 </div><!-- /browseView -->
 
 <div id="collectionView" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+    <h2 style="font-size:18px;font-weight:700">📒 My Collection</h2>
+    <button type="button" class="scan-btn" id="openScanBtn">📷 Scan Card to Add</button>
+  </div>
   <div class="collection-stats" id="collectionStats"></div>
   <div class="collection-table-wrap" id="collectionTableWrap">
     <div class="empty-state">
       <div class="icon">📒</div>
       <h3>Your collection is empty</h3>
-      <p>Browse expansions, click a card, then "+ Add to Collection"</p>
+      <p>Browse expansions, click a card, then "+ Add to Collection" — or scan a card photo above</p>
+    </div>
+  </div>
+</div>
+
+<!-- Scan Card modal -->
+<div class="modal-overlay" id="scanModal">
+  <div class="modal" style="max-width:640px">
+    <button class="modal-close" id="scanModalClose">×</button>
+    <h2 style="font-size:18px;margin-bottom:6px">📷 Scan a Pokémon Card</h2>
+    <p style="color:var(--text-dim);font-size:12px;margin-bottom:16px">Upload a photo or use your camera. We extract the card name with Google Vision OCR and find matches.</p>
+
+    <div class="scan-modal-body">
+      <label class="scan-dropzone" id="scanDropzone" for="scanFileInput">
+        <div class="icon">📥</div>
+        <p><strong>Click to choose a photo</strong> or drag & drop here</p>
+        <p class="hint">PNG, JPG, WEBP · max 6 MB after compression</p>
+      </label>
+      <input type="file" id="scanFileInput" accept="image/*" style="display:none">
+      <input type="file" id="scanCameraInput" accept="image/*" capture="environment" style="display:none">
+
+      <div class="scan-buttons">
+        <button type="button" class="btn" id="scanCameraBtn">📸 Use Camera</button>
+        <button type="button" class="btn btn-primary" id="scanRunBtn" disabled>🔍 Scan</button>
+      </div>
+
+      <div class="scan-preview" id="scanPreview" style="display:none"></div>
+      <div class="scan-status" id="scanStatus" style="display:none"></div>
+      <div class="scan-results" id="scanResults"></div>
     </div>
   </div>
 </div>
@@ -2291,6 +2430,195 @@ function renderCollectionTable(loading) {
 }
 
 // =====================
+// CARD SCANNER (Google Vision OCR)
+// =====================
+let scanState = {
+  imageDataUrl: null,
+  compressedBase64: null,
+};
+
+const STOPWORDS = new Set([
+  'pokemon','pokémon','trainer','energy','basic','stage','hp','illus','illustrator',
+  'attack','damage','retreat','weakness','resistance','psa','bgs','cgc','ace','grade'
+]);
+
+function openScanModal() {
+  resetScanModal();
+  $('#scanModal').classList.add('show');
+}
+function closeScanModal() {
+  $('#scanModal').classList.remove('show');
+}
+function resetScanModal() {
+  scanState.imageDataUrl = null;
+  scanState.compressedBase64 = null;
+  $('#scanPreview').style.display = 'none';
+  $('#scanPreview').innerHTML = '';
+  $('#scanStatus').style.display = 'none';
+  $('#scanStatus').innerHTML = '';
+  $('#scanResults').innerHTML = '';
+  $('#scanRunBtn').disabled = true;
+  $('#scanFileInput').value = '';
+  $('#scanCameraInput').value = '';
+}
+
+async function compressImage(file, maxDim = 1400, quality = 0.85) {
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+  const img = await new Promise((resolve, reject) => {
+    const i = new Image();
+    i.onload = () => resolve(i);
+    i.onerror = reject;
+    i.src = dataUrl;
+  });
+  let { width, height } = img;
+  if (width > maxDim || height > maxDim) {
+    const ratio = Math.min(maxDim / width, maxDim / height);
+    width = Math.round(width * ratio);
+    height = Math.round(height * ratio);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width; canvas.height = height;
+  canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
+async function handleScanFile(file) {
+  if (!file) return;
+  $('#scanStatus').style.display = '';
+  $('#scanStatus').innerHTML = '<span class="spinner" style="display:inline-block;width:14px;height:14px;border-width:2px"></span> Compressing image...';
+  try {
+    const compressed = await compressImage(file);
+    scanState.imageDataUrl = compressed;
+    scanState.compressedBase64 = compressed.replace(/^data:image\/\w+;base64,/, '');
+    $('#scanPreview').style.display = '';
+    $('#scanPreview').innerHTML = `<img src="${compressed}" alt="preview">`;
+    $('#scanStatus').innerHTML = `Image ready (${Math.round(scanState.compressedBase64.length * 0.75 / 1024)} KB) — click <strong>Scan</strong> to extract card name.`;
+    $('#scanRunBtn').disabled = false;
+  } catch (err) {
+    $('#scanStatus').innerHTML = `<span style="color:var(--red)">Failed to process image: ${escapeHtml(err.message)}</span>`;
+  }
+}
+
+async function runScan() {
+  if (!scanState.imageDataUrl) return;
+  $('#scanRunBtn').disabled = true;
+  $('#scanStatus').innerHTML = '<span class="spinner" style="display:inline-block;width:14px;height:14px;border-width:2px"></span> Sending to Google Vision OCR...';
+  $('#scanResults').innerHTML = '';
+
+  try {
+    const res = await fetch('/api/ocr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: scanState.imageDataUrl }),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      const isMissingKey = json.error === 'missing_credentials';
+      $('#scanStatus').innerHTML = `
+        <span style="color:var(--orange)">${isMissingKey ? '⚠ GOOGLE_VISION_API_KEY not set' : 'OCR failed'}</span>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:4px">${escapeHtml(json.message || `HTTP ${res.status}`)}</div>
+      `;
+      $('#scanRunBtn').disabled = false;
+      return;
+    }
+
+    const fullText = json.fullText || '';
+    const candidates = extractNameCandidates(fullText, json.words || []);
+    $('#scanStatus').innerHTML = `
+      <div>Found ${candidates.length} candidate name(s). Searching cards...</div>
+      <div class="scan-text-box">${escapeHtml(fullText.slice(0, 400))}${fullText.length > 400 ? '...' : ''}</div>
+    `;
+
+    const matches = await searchMatchingCards(candidates);
+    renderScanResults(matches, candidates);
+    $('#scanRunBtn').disabled = false;
+  } catch (err) {
+    $('#scanStatus').innerHTML = `<span style="color:var(--red)">Network error: ${escapeHtml(err.message)}</span>`;
+    $('#scanRunBtn').disabled = false;
+  }
+}
+
+function extractNameCandidates(fullText, words) {
+  // Look at each line; the card name is usually the first or one of the
+  // larger lines. Build a list of probable name strings (1-3 words each).
+  const lines = fullText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const candidates = new Set();
+  for (const line of lines.slice(0, 10)) {
+    const cleaned = line.replace(/[^\p{L}\s'-]/gu, ' ').replace(/\s+/g, ' ').trim();
+    if (!cleaned) continue;
+    const lc = cleaned.toLowerCase();
+    if (STOPWORDS.has(lc)) continue;
+    if (lc.length < 3) continue;
+    candidates.add(cleaned);
+    // Also try first 1-3 tokens
+    const tokens = cleaned.split(' ');
+    if (tokens.length > 1) candidates.add(tokens[0]);
+    if (tokens.length > 2) candidates.add(tokens.slice(0, 2).join(' '));
+  }
+  // Sort by length desc (longer = more specific)
+  return [...candidates].sort((a, b) => b.length - a.length).slice(0, 8);
+}
+
+async function searchMatchingCards(candidates) {
+  const seen = new Map();
+  for (const name of candidates) {
+    try {
+      const url = `${API_BASE}/cards?name=like:${encodeURIComponent(name)}`;
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      for (const c of (data || []).slice(0, 12)) {
+        if (!seen.has(c.id)) seen.set(c.id, c);
+      }
+      if (seen.size >= 24) break; // enough results
+    } catch {}
+  }
+  return [...seen.values()].slice(0, 24);
+}
+
+function renderScanResults(matches, candidates) {
+  if (matches.length === 0) {
+    $('#scanResults').innerHTML = `
+      <h4>No matches</h4>
+      <p style="color:var(--text-dim);font-size:12px">
+        OCR couldn't match a card name. Try a clearer photo (less glare, straight angle, good lighting).
+      </p>
+      <p style="color:var(--text-dim);font-size:11px;margin-top:6px">
+        Tried: ${candidates.slice(0, 5).map(c => `<code style="background:var(--bg-dark);padding:1px 6px;border-radius:3px">${escapeHtml(c)}</code>`).join(' ')}
+      </p>
+    `;
+    return;
+  }
+  $('#scanResults').innerHTML = `
+    <h4>${matches.length} possible match${matches.length > 1 ? 'es' : ''}</h4>
+    <p style="color:var(--text-dim);font-size:11px;margin-bottom:10px">Click a card to open and add to your collection</p>
+    <div class="scan-result-grid">
+      ${matches.map(c => {
+        const img = imgUrl(c.image, 'low');
+        return `
+          <div class="scan-result" data-card-id="${escapeHtml(c.id)}">
+            ${img ? `<img src="${escapeHtml(img)}" alt="${escapeHtml(c.name)}" loading="lazy" onerror="this.style.display='none'">` : ''}
+            <div class="scan-result-name">${escapeHtml(c.name)}</div>
+            <div class="scan-result-meta">#${escapeHtml(c.localId || '')} · ${escapeHtml(c.id.split('-')[0].toUpperCase())}</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+  $('#scanResults').querySelectorAll('.scan-result').forEach(el => {
+    el.addEventListener('click', () => {
+      closeScanModal();
+      openCardModal(el.dataset.cardId);
+    });
+  });
+}
+
+// =====================
 // EVENT HANDLERS
 // =====================
 $('#searchInput').addEventListener('input', e => {
@@ -2325,7 +2653,12 @@ $('#refreshBtn').addEventListener('click', async () => {
 });
 $('#modalClose').addEventListener('click', () => $('#modal').classList.remove('show'));
 $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') $('#modal').classList.remove('show'); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') $('#modal').classList.remove('show'); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    $('#modal').classList.remove('show');
+    $('#scanModal').classList.remove('show');
+  }
+});
 
 // View tabs
 document.querySelectorAll('.view-tab').forEach(tab => {
@@ -2343,6 +2676,26 @@ document.querySelectorAll('.view-mode-btn').forEach(btn => {
 
 // Filters panel: clear all
 $('#clearFiltersBtn').addEventListener('click', clearCardFilters);
+
+// Scan modal
+$('#openScanBtn').addEventListener('click', openScanModal);
+$('#scanModalClose').addEventListener('click', closeScanModal);
+$('#scanModal').addEventListener('click', e => { if (e.target.id === 'scanModal') closeScanModal(); });
+$('#scanFileInput').addEventListener('change', e => handleScanFile(e.target.files?.[0]));
+$('#scanCameraInput').addEventListener('change', e => handleScanFile(e.target.files?.[0]));
+$('#scanCameraBtn').addEventListener('click', () => $('#scanCameraInput').click());
+$('#scanRunBtn').addEventListener('click', runScan);
+// Drag & drop
+$('#scanDropzone').addEventListener('dragover', e => {
+  e.preventDefault(); $('#scanDropzone').classList.add('dragover');
+});
+$('#scanDropzone').addEventListener('dragleave', () => $('#scanDropzone').classList.remove('dragover'));
+$('#scanDropzone').addEventListener('drop', e => {
+  e.preventDefault();
+  $('#scanDropzone').classList.remove('dragover');
+  const file = e.dataTransfer?.files?.[0];
+  if (file) handleScanFile(file);
+});
 
 // =====================
 // INIT
