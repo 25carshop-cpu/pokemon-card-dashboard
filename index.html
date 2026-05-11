@@ -366,6 +366,34 @@
   .chip-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .chip { background: var(--bg-dark); border: 1px solid var(--border); padding: 4px 10px; border-radius: 999px; font-size: 12px; color: var(--text); display: inline-flex; align-items: center; gap: 4px; }
 
+  .filter-chip {
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all .12s ease;
+    font-family: inherit;
+  }
+  .filter-chip:hover { border-color: var(--accent-2); }
+  .filter-chip.active {
+    background: var(--accent-2);
+    border-color: var(--accent-2);
+    color: white;
+    font-weight: 600;
+  }
+  .grading-badge {
+    background: linear-gradient(135deg, #fbbf24, #d97706);
+    color: #1a1a1a;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+  }
+
   .footer {
     text-align: center;
     margin-top: 30px;
@@ -875,6 +903,8 @@ function renderTcgdexPricing(pricing) {
 async function loadCardTraderPrice(card) {
   const target = document.getElementById('cardtraderPricing');
   if (!target) return;
+  currentPricingFilter = 'all';
+  currentPricingData = null;
   const expCode = (card.set?.id || '').toLowerCase();
   const collectorNumber = card.localId || '';
   if (!expCode || !collectorNumber) {
@@ -905,11 +935,50 @@ async function loadCardTraderPrice(card) {
   renderCardTraderPricing(target, json);
 }
 
-function renderCardTraderPricing(target, data) {
-  const results = data.results || [];
-  const withListings = results.filter(r => r.stats && r.stats.count > 0);
+// Module-level state for current modal pricing data + filter
+let currentPricingData = null;
+let currentPricingFilter = 'all';
 
-  if (withListings.length === 0) {
+const PRICING_FILTERS = [
+  { id: 'all',     label: 'ทั้งหมด',  test: () => true },
+  { id: 'raw',     label: 'Raw (ไม่เกรด)', test: l => !l.graded && !l.grading },
+  { id: 'graded',  label: 'Graded ทั้งหมด', test: l => l.graded || !!l.grading },
+  { id: 'psa10',   label: 'PSA 10',  test: l => l.grading?.company === 'PSA' && l.grading?.grade === 10 },
+  { id: 'psa9up',  label: 'PSA 9+',  test: l => l.grading?.company === 'PSA' && l.grading?.grade >= 9 },
+  { id: 'bgs10',   label: 'BGS 10/9.5', test: l => l.grading?.company === 'BGS' && l.grading?.grade >= 9.5 },
+  { id: 'cgc10',   label: 'CGC 10',  test: l => l.grading?.company === 'CGC' && l.grading?.grade === 10 },
+  { id: 'ace10',   label: 'ACE 10',  test: l => l.grading?.company === 'ACE' && l.grading?.grade === 10 },
+];
+
+function computeStats(listings) {
+  if (!listings || !listings.length) return null;
+  const sorted = listings.slice().sort((a, b) => (a.price_cents || 0) - (b.price_cents || 0));
+  const cents = sorted.map(l => l.price_cents).filter(Number.isFinite);
+  if (!cents.length) return null;
+  const sum = cents.reduce((a, b) => a + b, 0);
+  const currency = sorted[0].currency || 'USD';
+  const symbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency + ' ';
+  return {
+    currency, symbol,
+    count: cents.length,
+    lowest: cents[0] / 100,
+    average: (sum / cents.length) / 100,
+    median: cents[Math.floor(cents.length / 2)] / 100,
+    highest: cents[cents.length - 1] / 100,
+  };
+}
+
+function renderCardTraderPricing(target, data) {
+  currentPricingData = data;
+  renderPricingWithFilter(target);
+}
+
+function renderPricingWithFilter(target) {
+  const data = currentPricingData;
+  if (!data || !target) return;
+  const results = (data.results || []).filter(r => (r.listings || []).length > 0);
+
+  if (results.length === 0) {
     target.innerHTML = `
       <div class="pricing-empty">
         ยังไม่มี seller บน CardTrader ขายการ์ดใบนี้ (JP)
@@ -919,60 +988,110 @@ function renderCardTraderPricing(target, data) {
     return;
   }
 
-  const html = withListings.map(r => {
-    const s = r.stats;
+  // Build available filter chips (only show those with at least 1 matching listing)
+  const allListings = results.flatMap(r => r.listings);
+  const filtersAvailable = PRICING_FILTERS.filter(f =>
+    f.id === 'all' || allListings.some(f.test)
+  );
+
+  const filterBar = `
+    <div class="filter-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+      ${filtersAvailable.map(f => {
+        const count = allListings.filter(f.test).length;
+        const active = currentPricingFilter === f.id;
+        return `
+          <button type="button" class="filter-chip ${active ? 'active' : ''}" data-filter="${f.id}">
+            ${escapeHtml(f.label)} <span style="opacity:0.7">(${count})</span>
+          </button>
+        `;
+      }).join('')}
+    </div>
+  `;
+
+  const activeFilter = PRICING_FILTERS.find(f => f.id === currentPricingFilter) || PRICING_FILTERS[0];
+
+  const html = results.map(r => {
+    const filtered = (r.listings || []).filter(activeFilter.test);
+    const stats = computeStats(filtered);
+
+    if (!stats) {
+      return `
+        <div style="margin-bottom:14px">
+          <div style="font-size:12px;color:var(--text-dim);margin-bottom:4px">
+            ${escapeHtml(r.name_en)} ${r.version ? '· ' + escapeHtml(r.version) : ''}
+          </div>
+          <div class="pricing-empty">ไม่มี listing ที่ตรงกับ filter "${escapeHtml(activeFilter.label)}"</div>
+        </div>
+      `;
+    }
+
     const boxes = `
       <div class="pricing-grid" style="margin-top:8px">
         <div class="price-box">
           <div class="name">Lowest</div>
-          <div class="amt">${s.symbol}${s.lowest.toFixed(2)}</div>
-          <div class="src">${s.count} listings</div>
+          <div class="amt">${stats.symbol}${stats.lowest.toFixed(2)}</div>
+          <div class="src">${stats.count} listings</div>
         </div>
         <div class="price-box">
           <div class="name">Average</div>
-          <div class="amt">${s.symbol}${s.average.toFixed(2)}</div>
-          <div class="src">avg of ${s.count}</div>
+          <div class="amt">${stats.symbol}${stats.average.toFixed(2)}</div>
+          <div class="src">avg of ${stats.count}</div>
         </div>
         <div class="price-box">
           <div class="name">Median</div>
-          <div class="amt">${s.symbol}${s.median.toFixed(2)}</div>
-          <div class="src">${s.currency}</div>
+          <div class="amt">${stats.symbol}${stats.median.toFixed(2)}</div>
+          <div class="src">${stats.currency}</div>
         </div>
         <div class="price-box">
           <div class="name">Highest</div>
-          <div class="amt">${s.symbol}${s.highest.toFixed(2)}</div>
-          <div class="src">${s.currency}</div>
+          <div class="amt">${stats.symbol}${stats.highest.toFixed(2)}</div>
+          <div class="src">${stats.currency}</div>
         </div>
       </div>
     `;
-    const sampleRows = (r.sample_listings || []).map(l => `
+
+    const sample = filtered.slice().sort((a, b) => (a.price_cents || 0) - (b.price_cents || 0)).slice(0, 8);
+    const rows = sample.map(l => `
       <tr style="border-top:1px solid var(--border)">
-        <td style="padding:6px 8px;color:var(--green);font-weight:700">${escapeHtml(l.formatted)}</td>
-        <td style="padding:6px 8px">${escapeHtml(l.condition)}</td>
-        <td style="padding:6px 8px;color:var(--text-dim)">${escapeHtml(l.country)} · ${escapeHtml(l.seller)}</td>
+        <td style="padding:6px 8px;color:var(--green);font-weight:700;white-space:nowrap">${escapeHtml(l.formatted)}</td>
+        <td style="padding:6px 8px">
+          ${l.grading ? `<span class="grading-badge">${escapeHtml(l.grading.label)}</span>` : escapeHtml(l.condition)}
+        </td>
+        <td style="padding:6px 8px;color:var(--text-dim);font-size:11px">
+          ${escapeHtml(l.country)} · ${escapeHtml(l.seller)}
+        </td>
       </tr>
     `).join('');
+
     return `
       <div style="margin-bottom:14px">
         <div style="font-size:12px;color:var(--text-dim);margin-bottom:4px">
           ${escapeHtml(r.name_en)} ${r.version ? '· ' + escapeHtml(r.version) : ''}
         </div>
         ${boxes}
-        ${sampleRows ? `
+        ${rows ? `
           <table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:12px">
             <thead><tr style="color:var(--text-dim);text-align:left">
               <th style="padding:6px 8px">Price</th>
-              <th style="padding:6px 8px">Condition</th>
+              <th style="padding:6px 8px">Grade / Condition</th>
               <th style="padding:6px 8px">Seller</th>
             </tr></thead>
-            <tbody>${sampleRows}</tbody>
+            <tbody>${rows}</tbody>
           </table>
         ` : ''}
       </div>
     `;
   }).join('');
 
-  target.innerHTML = html;
+  target.innerHTML = filterBar + html;
+
+  // Wire up filter chip clicks
+  target.querySelectorAll('.filter-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentPricingFilter = btn.dataset.filter;
+      renderPricingWithFilter(target);
+    });
+  });
 }
 
 // =====================
