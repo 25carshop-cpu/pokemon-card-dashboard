@@ -1349,18 +1349,34 @@ function tcgdexToScrydexId(cardId) {
 
 async function fetchScrydexCardPrices(card) {
   const scrydexId = tcgdexToScrydexId(card.id);
-  if (!scrydexId) return null;
+  if (!scrydexId) return { error: 'no_id', tcgdexId: card.id };
   const variant = card.variant || 'normal';
   const cacheKey = `scrydex-card:${scrydexId}:${variant}`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
-  try {
-    const res = await fetch(`/api/scrydex-card?id=${encodeURIComponent(scrydexId)}&variant=${encodeURIComponent(variant)}`);
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (json?.hasData) cacheSet(cacheKey, json, 3600);
-    return json;
-  } catch { return null; }
+
+  // Try the normalized id first; fall back to the raw TCGdex id if that fails.
+  const attempts = scrydexId === card.id ? [scrydexId] : [scrydexId, card.id];
+  let lastStatus = 0;
+  for (const tryId of attempts) {
+    try {
+      const res = await fetch(`/api/scrydex-card?id=${encodeURIComponent(tryId)}&variant=${encodeURIComponent(variant)}`);
+      lastStatus = res.status;
+      if (!res.ok) continue;
+      const json = await res.json();
+      json.scrydexId = tryId;
+      if (json?.hasData) {
+        cacheSet(cacheKey, json, 3600);
+      } else {
+        // Cache negative responses briefly so we don't refetch constantly
+        cacheSet(cacheKey, json, 600);
+      }
+      return json;
+    } catch {}
+  }
+  const fail = { error: 'fetch_failed', status: lastStatus, scrydexId, tcgdexId: card.id, hasData: false };
+  cacheSet(cacheKey, fail, 600);
+  return fail;
 }
 
 // Display order + Scrydex-style series colors
@@ -2344,9 +2360,24 @@ async function loadScrydexPrices(card) {
   if (!target) return;
   const data = await fetchScrydexCardPrices(card);
   if (!data || !data.hasData) {
+    const scrydexId = data?.scrydexId || tcgdexToScrydexId(card.id) || card.id;
+    const verifyUrl = `https://scrydex.com/pokemon/cards/-/${encodeURIComponent(scrydexId)}`;
+    const reason = data?.error === 'fetch_failed' && data?.status === 404
+      ? `Scrydex doesn't have this card (404).`
+      : data?.error === 'fetch_failed'
+        ? `Scrydex returned HTTP ${data.status}.`
+        : `Scrydex has the page but no chart data yet.`;
     target.innerHTML = `
       <h3>📊 Price History — Scrydex</h3>
-      <div class="sx-price-panel"><div class="sx-status">No price history available for this card on Scrydex.</div></div>
+      <div class="sx-price-panel">
+        <div class="sx-status">
+          ${reason}
+          <div style="margin-top:8px;font-size:11px">
+            Tried: <code style="background:var(--bg-dark);padding:1px 6px;border-radius:3px">${escapeHtml(scrydexId)}</code>
+            · <a href="${verifyUrl}" target="_blank" rel="noopener" style="color:var(--accent-2)">verify on scrydex ↗</a>
+          </div>
+        </div>
+      </div>
     `;
     return;
   }

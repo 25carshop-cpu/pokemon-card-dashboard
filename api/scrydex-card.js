@@ -31,19 +31,33 @@ export default async function handler(req, res) {
   const variant = (req.query?.variant || 'normal').toString().trim() || 'normal';
   if (!id) return res.status(400).json({ error: 'missing_id' });
 
-  const url = `https://scrydex.com/pokemon/cards/${encodeURIComponent(slug)}/${encodeURIComponent(id)}?variant=${encodeURIComponent(variant)}`;
+  const VARIANT_FALLBACKS = ['normal', 'holofoil', 'reverse', 'first_edition', 'reverse_holofoil'];
+  const tryVariants = [variant, ...VARIANT_FALLBACKS.filter(v => v !== variant)];
+
+  let html = null;
+  let triedUrl = null;
+  let lastStatus = 0;
+  for (const v of tryVariants) {
+    triedUrl = `https://scrydex.com/pokemon/cards/${encodeURIComponent(slug)}/${encodeURIComponent(id)}?variant=${encodeURIComponent(v)}`;
+    try {
+      const r = await fetch(triedUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; PokemonCardDashboard/1.0)',
+          'Accept': 'text/html,application/xhtml+xml',
+        },
+      });
+      lastStatus = r.status;
+      if (!r.ok) continue;
+      html = await r.text();
+      // If this page has any chart, stop. Otherwise try next variant.
+      if (/new Chartkick\["LineChart"\]/.test(html)) break;
+    } catch {}
+  }
+  if (!html) {
+    return res.status(lastStatus || 502).json({ error: 'fetch_failed', status: lastStatus, url: triedUrl });
+  }
 
   try {
-    const r = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; PokemonCardDashboard/1.0)',
-        'Accept': 'text/html,application/xhtml+xml',
-      },
-    });
-    if (!r.ok) {
-      return res.status(r.status).json({ error: 'fetch_failed', status: r.status, url });
-    }
-    const html = await r.text();
 
     // Extract card name from og:title meta — format: "{Name} | Pokémon | Scrydex"
     let name = '';
