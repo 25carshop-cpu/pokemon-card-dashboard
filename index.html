@@ -1333,35 +1333,58 @@ async function fetchScrydexSet(id) {
   return json;
 }
 
-// Convert a TCGdex card id (e.g. "sv01-007") to scrydex format ("sv1-7").
-// Scrydex uses "pt" instead of "." for sub-set versions: me2.5 → me2pt5, sv8.5 → sv8pt5.
-// Already-scrydex ids (containing underscore, e.g. "m2a_ja-223") pass through.
-function tcgdexToScrydexId(cardId) {
-  if (!cardId) return null;
-  if (cardId.includes('_')) return cardId;
+// Scrydex set-code mapping — verified by direct lookup against scrydex.com.
+// Most TCGdex codes map algorithmically (strip leading zeros, dot → "pt"),
+// but some sets use entirely different codes or a different dot convention.
+const SCRYDEX_SET_OVERRIDES = {
+  // SM/SWSH sub-sets: dot is dropped (no "pt")
+  'sm3.5':   'sm35',
+  'sm7.5':   'sm75',
+  'swsh3.5': 'swsh35',
+  'swsh4.5': 'swsh45',
+  // SWSH10.5 = Pokémon GO — completely different code
+  'swsh10.5': 'pgo',
+  // SV10.5 sub-sets carry a prefix letter + drop the trailing variant suffix
+  'sv10.5w': 'rsv10pt5',
+  'sv10.5b': 'zsv10pt5',
+};
+
+// Return ordered list of scrydex id candidates to try for a given TCGdex card id.
+// Already-scrydex ids (containing underscore, e.g. "m2a_ja-223") pass through unchanged.
+function tcgdexToScrydexCandidates(cardId) {
+  if (!cardId) return [];
+  if (cardId.includes('_')) return [cardId];
   const idx = cardId.indexOf('-');
-  if (idx < 0) return cardId;
+  if (idx < 0) return [cardId];
   const setCode = cardId.slice(0, idx);
   const cardNum = cardId.slice(idx + 1);
-  const cleanedSet = setCode
-    .replace(/^([a-z]+)0+(?=\d)/i, '$1')
-    .replace(/\./g, 'pt');
-  const cleanedNum = cardNum.replace(/^0+(?=\d)/, '');
-  return `${cleanedSet}-${cleanedNum}`;
+  const stripped = setCode.replace(/^([a-z]+)0+(?=\d)/i, '$1');
+  const num = cardNum.replace(/^0+(?=\d)/, '');
+  const out = [];
+  const add = code => { const id = `${code}-${num}`; if (!out.includes(id)) out.push(id); };
+  if (SCRYDEX_SET_OVERRIDES[stripped]) add(SCRYDEX_SET_OVERRIDES[stripped]);
+  add(stripped.replace(/\./g, 'pt'));
+  if (stripped.includes('.')) add(stripped.replace(/\./g, ''));
+  if (!out.includes(cardId)) out.push(cardId);
+  return out;
+}
+
+// Compatibility wrapper for code that wants a single primary candidate
+function tcgdexToScrydexId(cardId) {
+  const candidates = tcgdexToScrydexCandidates(cardId);
+  return candidates[0] || null;
 }
 
 async function fetchScrydexCardPrices(card) {
-  const scrydexId = tcgdexToScrydexId(card.id);
-  if (!scrydexId) return { error: 'no_id', tcgdexId: card.id };
+  const candidates = tcgdexToScrydexCandidates(card.id);
+  if (!candidates.length) return { error: 'no_id', tcgdexId: card.id };
   const variant = card.variant || 'normal';
-  const cacheKey = `scrydex-card:${scrydexId}:${variant}`;
+  const cacheKey = `scrydex-card:${candidates[0]}:${variant}`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
-  // Try the normalized id first; fall back to the raw TCGdex id if that fails.
-  const attempts = scrydexId === card.id ? [scrydexId] : [scrydexId, card.id];
   let lastStatus = 0;
-  for (const tryId of attempts) {
+  for (const tryId of candidates) {
     try {
       const res = await fetch(`/api/scrydex-card?id=${encodeURIComponent(tryId)}&variant=${encodeURIComponent(variant)}`);
       lastStatus = res.status;
@@ -1370,14 +1393,17 @@ async function fetchScrydexCardPrices(card) {
       json.scrydexId = tryId;
       if (json?.hasData) {
         cacheSet(cacheKey, json, 3600);
-      } else {
-        // Cache negative responses briefly so we don't refetch constantly
-        cacheSet(cacheKey, json, 600);
+        return json;
       }
-      return json;
+      // Got 200 but no data — keep trying other candidates first; remember as fallback
+      var emptyResult = json;
     } catch {}
   }
-  const fail = { error: 'fetch_failed', status: lastStatus, scrydexId, tcgdexId: card.id, hasData: false };
+  if (typeof emptyResult !== 'undefined') {
+    cacheSet(cacheKey, emptyResult, 600);
+    return emptyResult;
+  }
+  const fail = { error: 'fetch_failed', status: lastStatus, scrydexId: candidates[0], tcgdexId: card.id, hasData: false };
   cacheSet(cacheKey, fail, 600);
   return fail;
 }
