@@ -688,6 +688,91 @@
     font-weight: 800;
     font-size: 12px;
   }
+
+  /* Watchlist (Graded tracker) */
+  .watchlist-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  .watchlist-card-header {
+    display: grid;
+    grid-template-columns: 70px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .watchlist-card-img { width: 60px; aspect-ratio: 0.72; border-radius: 4px; object-fit: cover; }
+  .watchlist-card-title { font-size: 15px; font-weight: 700; }
+  .watchlist-card-meta { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+  .watchlist-grade-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-bottom: 12px;
+  }
+  .watchlist-grade-table th, .watchlist-grade-table td {
+    padding: 8px 10px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+  }
+  .watchlist-grade-table thead th {
+    color: var(--text-dim);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: var(--bg-card-2);
+  }
+  .watchlist-grade-table .grade-cell {
+    background: rgba(255,203,5,0.08);
+    color: var(--accent);
+    font-weight: 800;
+    text-align: left;
+    padding-left: 14px;
+    width: 110px;
+  }
+  .watchlist-grade-table .price-cell strong { color: var(--green); font-size: 13px; }
+  .watchlist-grade-table .price-cell .meta { font-size: 10px; color: var(--text-dim); }
+  .watchlist-grade-table .price-cell.empty { color: var(--text-dim); font-style: italic; }
+  .watchlist-grade-table .price-cell .loader { color: var(--text-dim); font-size: 11px; }
+  .watchlist-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    margin-top: 8px;
+  }
+  .watchlist-link-btn {
+    background: var(--bg-card-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 10px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all .12s ease;
+  }
+  .watchlist-link-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .watchlist-card-actions { display: flex; gap: 6px; }
+  .add-watchlist-btn {
+    background: var(--accent);
+    color: #1a1a1a;
+    border: none;
+    padding: 9px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 700;
+    font-family: inherit;
+    font-size: 13px;
+  }
+  .add-watchlist-btn:hover { filter: brightness(1.1); }
+  .add-watchlist-btn.added { background: var(--text-dim); cursor: default; }
   .scan-text-box {
     background: var(--bg-dark);
     border: 1px solid var(--border);
@@ -978,6 +1063,9 @@
   <button type="button" class="view-tab" data-view="collection" id="tabCollection">
     📒 My Collection <span class="badge-count" id="collectionCount">0</span>
   </button>
+  <button type="button" class="view-tab" data-view="watchlist" id="tabWatchlist">
+    📊 Graded Watchlist <span class="badge-count" id="watchlistCount">0</span>
+  </button>
 </div>
 
 <div id="browseView">
@@ -1075,6 +1163,22 @@
       <div class="icon">📒</div>
       <h3>Your collection is empty</h3>
       <p>Browse expansions, click a card, then "+ Add to Collection" — or scan a card photo above</p>
+    </div>
+  </div>
+</div>
+
+<div id="watchlistView" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+    <div>
+      <h2 style="font-size:18px;font-weight:700">📊 Graded Watchlist</h2>
+      <p style="font-size:12px;color:var(--text-dim);margin-top:2px">Track PSA 9–10 + BGS 9.5–10 prices for both EN and JP markets</p>
+    </div>
+  </div>
+  <div id="watchlistContainer">
+    <div class="empty-state">
+      <div class="icon">📊</div>
+      <h3>Watchlist is empty</h3>
+      <p>Open any card and click "+ Add to Watchlist" to start tracking</p>
     </div>
   </div>
 </div>
@@ -1259,9 +1363,11 @@ let state = {
   search: '',
   typeFilter: '',
   sortBy: 'number',
-  view: 'browse', // 'browse' | 'collection'
+  view: 'browse', // 'browse' | 'collection' | 'watchlist'
   collection: [],
   collectionPrices: {}, // cardId -> { stats per grade, fetchedAt }
+  watchlist: [],
+  watchlistPrices: {}, // cardId -> { en: result, jp: result, fetchedAt }
   // Series state
   seriesCatalog: {},        // { id: { label, sets: [{id, name}] } } from /series/{id}
   selectedSeries: new Set(),// which series are loaded into the expansion list
@@ -1355,6 +1461,49 @@ function updateCollectionItem(idx, patch) {
 function updateCollectionTabBadge() {
   const totalQty = state.collection.reduce((s, c) => s + (c.qty || 0), 0);
   $('#collectionCount').textContent = totalQty;
+}
+
+// =====================
+// WATCHLIST (localStorage)
+// =====================
+const WATCHLIST_KEY = 'watchlist:v1';
+
+function loadWatchlist() {
+  try {
+    const raw = localStorage.getItem(WATCHLIST_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+function saveWatchlist() {
+  try { localStorage.setItem(WATCHLIST_KEY, JSON.stringify(state.watchlist)); }
+  catch (e) { console.warn('Failed to save watchlist', e); }
+}
+function isInWatchlist(cardId) {
+  return state.watchlist.some(c => c.id === cardId);
+}
+function addToWatchlist(card) {
+  if (isInWatchlist(card.id)) return;
+  state.watchlist.push({
+    id: card.id,
+    name: card.name,
+    image: card.image || null,
+    setId: card.set?.id || '',
+    setName: card.set?.name || '',
+    localId: card.localId || '',
+    cardCount: card.set?.cardCount?.official || null,
+    addedAt: Date.now(),
+  });
+  saveWatchlist();
+  updateWatchlistTabBadge();
+}
+function removeFromWatchlist(idx) {
+  state.watchlist.splice(idx, 1);
+  saveWatchlist();
+  updateWatchlistTabBadge();
+  renderWatchlist();
+}
+function updateWatchlistTabBadge() {
+  $('#watchlistCount').textContent = state.watchlist.length;
 }
 
 // =====================
@@ -1561,7 +1710,9 @@ function setView(view) {
   });
   $('#browseView').style.display = view === 'browse' ? '' : 'none';
   $('#collectionView').style.display = view === 'collection' ? '' : 'none';
+  $('#watchlistView').style.display = view === 'watchlist' ? '' : 'none';
   if (view === 'collection') renderCollection();
+  if (view === 'watchlist') renderWatchlist();
 }
 
 // =====================
@@ -1903,7 +2054,13 @@ function renderCardModal(card) {
         <input type="number" id="addQty" min="1" max="999" value="1" title="Quantity" style="width:70px" />
         <input type="number" id="addPurchasePrice" min="0" step="0.01" placeholder="Cost (optional)" title="Purchase price" style="width:130px" />
         <button type="submit" class="btn-add" id="addBtn">+ Add to Collection</button>
+        <button type="button" class="add-watchlist-btn ${isInWatchlist(card.id) ? 'added' : ''}" id="addWatchBtn" ${isInWatchlist(card.id) ? 'disabled' : ''}>
+          ${isInWatchlist(card.id) ? '✓ In Watchlist' : '📊 Add to Watchlist'}
+        </button>
       </form>
+      <p style="font-size:11px;color:var(--text-dim);margin-top:8px">
+        <strong>Collection</strong> = inventory you own (with qty + cost). <strong>Watchlist</strong> = track PSA 9–10 + BGS 9.5–10 prices in EN + JP markets.
+      </p>
     </div>
 
     <div class="modal-section">
@@ -1932,6 +2089,16 @@ function renderCardModal(card) {
       btn.textContent = '✓ Added';
       btn.classList.add('added');
       setTimeout(() => { btn.textContent = '+ Add another'; btn.classList.remove('added'); }, 1500);
+    });
+  }
+  const watchBtn = document.getElementById('addWatchBtn');
+  if (watchBtn) {
+    watchBtn.addEventListener('click', () => {
+      if (isInWatchlist(card.id)) return;
+      addToWatchlist(card);
+      watchBtn.textContent = '✓ In Watchlist';
+      watchBtn.classList.add('added');
+      watchBtn.disabled = true;
     });
   }
 }
@@ -2465,6 +2632,159 @@ function renderCollectionTable(loading) {
     btn.addEventListener('click', () => {
       if (!confirm('Remove this card from your collection?')) return;
       removeFromCollection(parseInt(btn.dataset.remove, 10));
+    });
+  });
+}
+
+// =====================
+// WATCHLIST RENDERING
+// =====================
+const WATCHLIST_GRADES = ['PSA 9', 'PSA 10', 'BGS 9.5', 'BGS 10'];
+const WATCHLIST_LANGS = [
+  { code: 'en', label: 'EN (US/EU)', flag: '🇺🇸' },
+  { code: 'jp', label: 'JP', flag: '🇯🇵' },
+];
+
+async function fetchWatchlistPrices(item) {
+  const setCode = (item.setId || '').toLowerCase();
+  const cn = item.localId || '';
+  if (!setCode || !cn) return { en: null, jp: null };
+
+  const cacheKey = `wl:${setCode}:${cn}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) return cached;
+
+  const fetchOne = async (lang) => {
+    try {
+      const params = new URLSearchParams({
+        expansion_code: setCode,
+        expansion_name: item.setName || '',
+        collector_number: cn,
+        language: lang,
+      });
+      const r = await fetch(`/api/price?${params}`);
+      return r.ok ? r.json() : null;
+    } catch { return null; }
+  };
+  const [en, jp] = await Promise.all([fetchOne('en'), fetchOne('jp')]);
+  const result = { en, jp };
+  cacheSet(cacheKey, result, 600);
+  return result;
+}
+
+function statsForGradeLang(json, grade) {
+  if (!json?.results) return null;
+  const all = json.results.flatMap(r => r.listings || []);
+  const test = GRADE_TESTS[grade];
+  if (!test) return null;
+  const matched = all.filter(test);
+  return computeStats(matched);
+}
+
+function buildWatchlistLinks(item) {
+  const name = item.name || '';
+  const setCode = (item.setId || '').toUpperCase();
+  const num = item.localId || '';
+  const enQuery = `Pokemon ${name} ${setCode} ${num}`.trim();
+  const jpQuery = `ポケモンカード ${name} ${num}`.trim();
+  return [
+    { icon: '🇺🇸', label: 'eBay PSA 10 (Sold)', url: `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(enQuery + ' PSA 10')}&LH_Sold=1&LH_Complete=1` },
+    { icon: '🇺🇸', label: 'eBay BGS 9.5+ (Sold)', url: `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(enQuery + ' BGS 9.5')}&LH_Sold=1&LH_Complete=1` },
+    { icon: '🇯🇵', label: 'Yahoo Auctions JP (PSA 10)', url: `https://auctions.yahoo.co.jp/search/search?p=${encodeURIComponent(jpQuery + ' PSA10')}` },
+    { icon: '🇯🇵', label: 'Mercari JP (PSA 10)', url: `https://jp.mercari.com/search?keyword=${encodeURIComponent(jpQuery + ' PSA10')}` },
+    { icon: '🔍', label: 'PSA Pop Report', url: `https://www.psacard.com/pop/?q=${encodeURIComponent(name)}` },
+    { icon: '🔍', label: 'BGS Pop Report', url: `https://www.beckett.com/grading/pop-report/Pokemon` },
+    { icon: '📊', label: 'PriceCharting', url: `https://www.pricecharting.com/search-products?q=${encodeURIComponent(enQuery)}&type=prices` },
+    { icon: '🇯🇵', label: 'Yuyutei (遊々亭)', url: `https://yuyu-tei.jp/sell/poc/s/search?word=${encodeURIComponent(name)}` },
+  ];
+}
+
+async function renderWatchlist() {
+  if (state.watchlist.length === 0) {
+    $('#watchlistContainer').innerHTML = `
+      <div class="empty-state">
+        <div class="icon">📊</div>
+        <h3>Watchlist is empty</h3>
+        <p>Open any card and click "+ Add to Watchlist" to start tracking</p>
+      </div>
+    `;
+    return;
+  }
+
+  // Render skeleton first
+  $('#watchlistContainer').innerHTML = state.watchlist.map((item, idx) => renderWatchlistCard(item, idx, null)).join('');
+  wireWatchlistRemoveButtons();
+
+  // Fetch prices in parallel for all watchlist items
+  await Promise.all(state.watchlist.map(async (item, idx) => {
+    try {
+      const prices = await fetchWatchlistPrices(item);
+      state.watchlistPrices[item.id] = prices;
+      const card = document.querySelector(`[data-watchlist-card="${idx}"]`);
+      if (card) card.outerHTML = renderWatchlistCard(item, idx, prices);
+    } catch {}
+  }));
+  wireWatchlistRemoveButtons();
+}
+
+function renderWatchlistCard(item, idx, prices) {
+  const links = buildWatchlistLinks(item);
+  const imgUrlSrc = item.image ? `${item.image}/low.png` : '';
+
+  const priceCells = WATCHLIST_GRADES.map(grade => {
+    const cells = WATCHLIST_LANGS.map(lang => {
+      if (!prices) return `<td class="price-cell"><span class="loader">…</span></td>`;
+      const json = prices[lang.code];
+      const stats = json ? statsForGradeLang(json, grade) : null;
+      if (!stats) return `<td class="price-cell empty">—</td>`;
+      return `<td class="price-cell">
+        <strong>${stats.symbol}${stats.lowest.toFixed(2)}</strong>
+        <div class="meta">avg ${stats.symbol}${stats.average.toFixed(2)} · ${stats.count}</div>
+      </td>`;
+    }).join('');
+    return `<tr><td class="grade-cell">${escapeHtml(grade)}</td>${cells}</tr>`;
+  }).join('');
+
+  return `
+    <div class="watchlist-card" data-watchlist-card="${idx}">
+      <div class="watchlist-card-header">
+        <img class="watchlist-card-img" src="${escapeHtml(imgUrlSrc)}" alt="" onerror="this.style.display='none'" loading="lazy">
+        <div>
+          <div class="watchlist-card-title">${escapeHtml(item.name)}</div>
+          <div class="watchlist-card-meta">
+            ${escapeHtml(item.setName)} · #${escapeHtml(item.localId)}${item.cardCount ? '/' + item.cardCount : ''}
+            · <code style="background:var(--bg-dark);padding:1px 6px;border-radius:3px;font-size:10px">${escapeHtml((item.setId || '').toUpperCase())}-${escapeHtml(item.localId)}</code>
+          </div>
+        </div>
+        <div class="watchlist-card-actions">
+          <button type="button" class="icon-btn" data-watchlist-remove="${idx}" title="Remove from watchlist">×</button>
+        </div>
+      </div>
+      <table class="watchlist-grade-table">
+        <thead>
+          <tr>
+            <th></th>
+            ${WATCHLIST_LANGS.map(l => `<th>${l.flag} ${escapeHtml(l.label)}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>${priceCells}</tbody>
+      </table>
+      <div class="watchlist-links">
+        ${links.map(l => `
+          <a class="watchlist-link-btn" href="${escapeHtml(l.url)}" target="_blank" rel="noopener">
+            ${l.icon} ${escapeHtml(l.label)} ↗
+          </a>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function wireWatchlistRemoveButtons() {
+  document.querySelectorAll('[data-watchlist-remove]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!confirm('Remove this card from watchlist?')) return;
+      removeFromWatchlist(parseInt(btn.dataset.watchlistRemove, 10));
     });
   });
 }
@@ -3136,9 +3456,11 @@ async function init() {
 
 $('#lastUpdated').textContent = 'Updated: ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
-// Restore collection from localStorage
+// Restore collection + watchlist from localStorage
 state.collection = loadCollection();
 updateCollectionTabBadge();
+state.watchlist = loadWatchlist();
+updateWatchlistTabBadge();
 
 init();
 </script>
