@@ -1,94 +1,76 @@
-# Pokémon Card Dashboard — Scrydex Live
+# Pokémon Card Dashboard — TCGdex Live
 
-แดชบอร์ดดูข้อมูลการ์ดโปเกมอน **ภาษาญี่ปุ่น** ดึงข้อมูลแบบเรียลไทม์จาก [Scrydex API](https://scrydex.com/docs/pokemon/api-reference) — กรองเฉพาะชุดที่ออกในปี **2023–2026**
+แดชบอร์ดดูข้อมูลการ์ดโปเกมอน **ภาษาญี่ปุ่น** ดึงข้อมูลแบบเรียลไทม์จาก [TCGdex API](https://tcgdex.dev/) — กรองเฉพาะชุดที่ออกในปี **2023–2026**
+
+> ✅ **ไม่ต้องใช้ API Key** · ✅ Static site เปล่าๆ (ไม่ต้องมี backend) · ✅ Deploy ที่ Vercel / Netlify / GitHub Pages ได้หมด
 
 ## Features
 
-- ดึงรายการ Expansions จาก Scrydex (กรองอัตโนมัติ ปี 2023–2026)
-- เลือกชุดเพื่อดูการ์ดทั้งหมดในชุดนั้น แสดงชื่อทั้งญี่ปุ่นและคำแปลอังกฤษ
-- ค้นหาด้วยชื่อ JP/EN, rarity, series
-- ฟิลเตอร์ตามประเภทพลังงาน (草/炎/水/雷/超...)
-- คลิกการ์ดเพื่อดูรายละเอียดเต็ม — ワザ (Attacks), 弱点 (Weakness), にげる (Retreat), Market Pricing
-- Cache 2 ชั้น (Vercel Edge + browser localStorage) เพื่อประหยัด API credits
-- ปุ่ม Refresh สำหรับล้าง cache แล้วดึงข้อมูลใหม่
+- ดึงรายการ Expansions อัตโนมัติจาก Series **SV** (Scarlet & Violet) + **M** (Mega) แล้วกรองปี 2023–2026
+- คลิกชุดเพื่อดูการ์ดทั้งหมด พร้อมรูปจริง
+- คลิกการ์ดเพื่อดูรายละเอียดเต็ม — ワザ (Attacks), 弱点 (Weakness), 抵抗 (Resistance), にげる (Retreat)
+- ค้นหาการ์ดและชุดด้วยชื่อภาษาญี่ปุ่น
+- Cache ใน browser localStorage 24 ชม. (ครั้งแรก ~30 ชุด ต้องดึง detail; ครั้งต่อไปเปิดเร็ว)
+- ปุ่ม Refresh สำหรับล้าง cache แล้วดึงใหม่
 
 ## โครงสร้างไฟล์
 
 ```
 pokemon-card-dashboard/
-├── index.html              # UI ทั้งหมด (HTML + CSS + JS)
-├── api/
-│   ├── expansions.js       # GET /api/expansions  → list + filter 2023-2026
-│   ├── cards.js            # GET /api/cards?exp=  → cards in expansion
-│   └── card.js             # GET /api/card?id=    → single card + pricing
-├── vercel.json             # Vercel config
-├── .env.local.example      # template สำหรับ local dev
+├── index.html      # UI + JS เรียก TCGdex API ตรงจาก browser
+├── vercel.json     # Vercel static config
 ├── .gitignore
 └── README.md
 ```
 
-## ตั้งค่าก่อนใช้งาน
+ไม่มี backend, ไม่มี environment variables, ไม่มี API key
 
-ต้องมี **Scrydex API Key + Team ID** ก่อน — สมัครและดึงค่าได้ที่ [scrydex.com/login](https://scrydex.com/login)
-1. Login → เข้า Scrydex Account Hub
-2. สร้าง Team → ได้ **Team ID**
-3. Subscribe แพลน → กด Generate **API Key**
+## API ที่ใช้
 
-### Deploy บน Vercel (แนะนำ)
+ทุก endpoint เรียกตรงจาก browser (TCGdex รองรับ CORS):
+
+| Endpoint | คำอธิบาย |
+|---|---|
+| `GET /v2/ja/series/SV` | ดึงรายชื่อชุดใน Series Scarlet & Violet |
+| `GET /v2/ja/series/M` | ดึงรายชื่อชุดใน Series Mega |
+| `GET /v2/ja/sets/{id}` | ดึง metadata ของชุด + การ์ดทั้งหมด (รวม releaseDate) |
+| `GET /v2/ja/cards/{id}` | ดึงรายละเอียดการ์ดใบเดียว |
+
+## Deploy
+
+### Vercel (แนะนำ)
 
 1. Push repo ขึ้น GitHub
 2. ไปที่ [vercel.com/new](https://vercel.com/new) → Import repo
-3. ก่อนกด Deploy → **Settings → Environment Variables** ใส่:
-   ```
-   SCRYDEX_API_KEY = <api key ของคุณ>
-   SCRYDEX_TEAM_ID = <team id ของคุณ>
-   ```
-4. กด Deploy
-5. ถ้าเพิ่ม env vars หลัง deploy แล้ว ต้อง **Redeploy** ครั้งหนึ่งเพื่อให้มีผล
+3. กด **Deploy** (ไม่ต้องตั้ง env var ใดๆ)
 
-### Local Development
+### GitHub Pages
 
 ```bash
-# 1. คัดลอก template เป็นไฟล์จริง (ไม่ commit)
-cp .env.local.example .env.local
-
-# 2. แก้ไฟล์ .env.local ใส่ key จริง
-
-# 3. รัน dev server (ต้องมี Vercel CLI)
-npx vercel dev
-# เปิดที่ http://localhost:3000
+# ใน repo settings → Pages → Source = main branch / root
+# หรือใช้ workflow:
+# .github/workflows/pages.yml
 ```
 
-> **หมายเหตุ:** ต้องใช้ `vercel dev` ไม่สามารถใช้ `python -m http.server` ได้แล้ว เพราะมี Serverless Functions ใน `/api`
+### Local Preview
 
-## API Endpoints (Internal Proxy)
+```powershell
+# วิธีง่ายที่สุด
+npx serve .
+# หรือ
+python -m http.server 8080
+```
 
-ทุก endpoint รันบน Vercel Serverless Function — เก็บ API Key ไว้ฝั่ง server เท่านั้น
+เปิด `http://localhost:8080` ในเบราว์เซอร์
 
-| Endpoint | คำอธิบาย | Cache |
-|---|---|---|
-| `GET /api/expansions` | ดึง expansions ปี 2023-2026 (ภาษา JP) | 1 ชม. |
-| `GET /api/cards?exp=<id>` | ดึงการ์ดในชุด | 1 ชม. |
-| `GET /api/card?id=<id>` | ดึงการ์ดใบเดียว + ราคา | 30 นาที |
+## หมายเหตุเรื่อง Pricing
 
-## Cache Strategy
+TCGdex ดึงราคาจาก **TCGplayer** (USD) และ **Cardmarket** (EUR) — แต่ตลาดทั้งสองนี้ขายเฉพาะการ์ด **ภาษาอังกฤษ/EU** เป็นหลัก ดังนั้นการ์ด **ภาษาญี่ปุ่นมักไม่มีข้อมูลราคา**
 
-- **Vercel Edge Cache** — `s-maxage` + `stale-while-revalidate` ที่ HTTP header
-- **Browser localStorage** — เก็บ JSON response ในเครื่อง user (TTL ตามแต่ละ endpoint)
-- **Lazy pricing** — ดึงราคาเฉพาะตอนเปิด modal เพื่อไม่กิน API credit เกินจำเป็น
-- ปุ่ม **↻ Refresh** ในแถบ toolbar ล้าง localStorage cache ทั้งหมด
-
-## Troubleshooting
-
-### `missing_credentials`
-- ลืมใส่ env vars ใน Vercel หรือ `.env.local`
-- ใส่แล้วแต่ลืม Redeploy บน Vercel
-
-### `upstream_error 401`
-- API Key หรือ Team ID ผิด ตรวจสอบที่ Scrydex Account Hub
-
-### `upstream_error 429`
-- ใช้เกิน quota ของแผน — รอ reset หรือ upgrade แผน
+ถ้าอยากได้ราคาการ์ดญี่ปุ่นจริงๆ ต้องไปดึงจากตลาดอื่น เช่น:
+- **Yuyutei** (遊々亭) — ตลาดใหญ่สุดในญี่ปุ่น (ไม่มี public API)
+- **Cardrush** (カードラッシュ)
+- **Snkrdunk** หรือ **Mercari** — Resell platforms
 
 ## License
 
