@@ -648,6 +648,46 @@
   }
   .scan-result-name { font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .scan-result-meta { font-size: 10px; color: var(--text-dim); }
+  .scan-result-price {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--green);
+    min-height: 16px;
+  }
+  .scan-result-price .loading-dots { color: var(--text-dim); font-weight: 400; }
+  .scan-result-price .grade-tag {
+    display: inline-block;
+    background: linear-gradient(135deg, #fbbf24, #d97706);
+    color: #1a1a1a;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 9px;
+    margin-left: 4px;
+    font-weight: 800;
+  }
+  .grade-detected-banner {
+    background: linear-gradient(135deg, rgba(251,191,36,0.15), rgba(217,119,6,0.1));
+    border: 1px solid rgba(251,191,36,0.4);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin: 12px 0;
+    font-size: 13px;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .grade-detected-banner .grade-pill-large {
+    background: linear-gradient(135deg, #fbbf24, #d97706);
+    color: #1a1a1a;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-weight: 800;
+    font-size: 12px;
+  }
   .scan-text-box {
     background: var(--bg-dark);
     border: 1px solid var(--border);
@@ -2548,18 +2588,44 @@ async function runScan() {
     const words = (result?.data?.words || []).map(w => w.text).filter(Boolean);
 
     const candidates = extractNameCandidates(fullText, words);
+    const detectedGrade = detectGradeFromOcr(fullText);
     $('#scanStatus').innerHTML = `
-      <div>Found ${candidates.length} candidate name(s). Searching TCGdex...</div>
+      <div>Found ${candidates.length} candidate name(s). Searching TCGdex + fetching prices...</div>
       <div class="scan-text-box">${escapeHtml(fullText.slice(0, 400))}${fullText.length > 400 ? '...' : ''}</div>
     `;
 
     const matches = await searchMatchingCards(candidates);
-    renderScanResults(matches, candidates);
+    renderScanResults(matches, candidates, detectedGrade);
   } catch (err) {
     $('#scanStatus').innerHTML = `<span style="color:var(--red)">OCR failed: ${escapeHtml(err.message)}</span>`;
   } finally {
     $('#scanRunBtn').disabled = false;
   }
+}
+
+function detectGradeFromOcr(text) {
+  if (!text) return null;
+  // Match "PSA 10", "PSA GEM MT 10", "BGS 9.5", "CGC 10", etc.
+  const re = /\b(PSA|BGS|CGC|ACE|GRAAD|HGA|SGC|TAG|GMA|MNT|ARS)\s*(?:GEM\s+MT\s+|GEM\s+MINT\s+|GEM\s+|MINT\s+|BLACK\s+LABEL\s+)?(10(?:\.0)?|[0-9](?:\.[0-9])?)\b/i;
+  const m = text.match(re);
+  if (!m) return null;
+  const company = m[1].toUpperCase();
+  const grade = parseFloat(m[2]);
+  if (!Number.isFinite(grade)) return null;
+  // Map to filter labels we already use
+  let filterLabel = `${company} ${grade}`;
+  return { company, grade, label: filterLabel };
+}
+
+function getSetCodeFromCardId(cardId) {
+  // Card IDs look like "sv10-001" or "sv03.5-061" — set code is everything before last "-"
+  const idx = cardId.lastIndexOf('-');
+  return idx > 0 ? cardId.slice(0, idx) : '';
+}
+
+function gradeMatchesFilter(grade, listing) {
+  if (!grade || !listing.grading) return false;
+  return listing.grading.company === grade.company && listing.grading.grade === grade.grade;
 }
 
 function extractNameCandidates(fullText, words) {
@@ -2600,7 +2666,7 @@ async function searchMatchingCards(candidates) {
   return [...seen.values()].slice(0, 24);
 }
 
-function renderScanResults(matches, candidates) {
+function renderScanResults(matches, candidates, detectedGrade) {
   if (matches.length === 0) {
     $('#scanResults').innerHTML = `
       <h4>No matches</h4>
@@ -2613,9 +2679,19 @@ function renderScanResults(matches, candidates) {
     `;
     return;
   }
+
+  const gradeBanner = detectedGrade ? `
+    <div class="grade-detected-banner">
+      <span>🏆 Detected grade from image:</span>
+      <span class="grade-pill-large">${escapeHtml(detectedGrade.label)}</span>
+      <span style="margin-left:auto;font-size:11px;color:var(--text-dim)">prices below show ${escapeHtml(detectedGrade.label)} listings when available</span>
+    </div>
+  ` : '';
+
   $('#scanResults').innerHTML = `
     <h4>${matches.length} possible match${matches.length > 1 ? 'es' : ''}</h4>
-    <p style="color:var(--text-dim);font-size:11px;margin-bottom:10px">Click a card to open and add to your collection</p>
+    ${gradeBanner}
+    <p style="color:var(--text-dim);font-size:11px;margin-bottom:10px">Live prices from CardTrader. Click a card to add to collection.</p>
     <div class="scan-result-grid">
       ${matches.map(c => {
         const img = imgUrl(c.image, 'low');
@@ -2623,7 +2699,8 @@ function renderScanResults(matches, candidates) {
           <div class="scan-result" data-card-id="${escapeHtml(c.id)}">
             ${img ? `<img src="${escapeHtml(img)}" alt="${escapeHtml(c.name)}" loading="lazy" onerror="this.style.display='none'">` : ''}
             <div class="scan-result-name">${escapeHtml(c.name)}</div>
-            <div class="scan-result-meta">#${escapeHtml(c.localId || '')} · ${escapeHtml(c.id.split('-')[0].toUpperCase())}</div>
+            <div class="scan-result-meta">#${escapeHtml(c.localId || '')} · ${escapeHtml(getSetCodeFromCardId(c.id).toUpperCase())}</div>
+            <div class="scan-result-price" data-price-for="${escapeHtml(c.id)}"><span class="loading-dots">Fetching price...</span></div>
           </div>
         `;
       }).join('')}
@@ -2635,6 +2712,60 @@ function renderScanResults(matches, candidates) {
       openCardModal(el.dataset.cardId);
     });
   });
+
+  // Fetch prices for the top matches in parallel (limit to 8 to save quota)
+  const topToPrice = matches.slice(0, 8);
+  topToPrice.forEach(c => fetchAndShowScanPrice(c, detectedGrade));
+}
+
+async function fetchAndShowScanPrice(card, detectedGrade) {
+  const target = document.querySelector(`.scan-result-price[data-price-for="${card.id}"]`);
+  if (!target) return;
+  const setCode = getSetCodeFromCardId(card.id);
+  if (!setCode || !card.localId) {
+    target.innerHTML = '<span class="loading-dots">—</span>';
+    return;
+  }
+  try {
+    const params = new URLSearchParams({
+      expansion_code: setCode,
+      expansion_name: '',
+      collector_number: card.localId,
+      language: CARD_LANGUAGE,
+    });
+    const res = await fetch(`/api/price?${params}`);
+    const json = await res.json();
+    if (!res.ok) {
+      target.innerHTML = '<span class="loading-dots">no data</span>';
+      return;
+    }
+    const allListings = (json.results || []).flatMap(r => r.listings || []);
+    if (allListings.length === 0) {
+      target.innerHTML = '<span class="loading-dots">no listings</span>';
+      return;
+    }
+
+    // If a grade was detected, prefer that grade's stats
+    if (detectedGrade) {
+      const graded = allListings.filter(l => gradeMatchesFilter(detectedGrade, l));
+      if (graded.length > 0) {
+        const s = computeStats(graded);
+        target.innerHTML = `
+          <strong>${s.symbol}${s.lowest.toFixed(2)}</strong> – ${s.symbol}${s.highest.toFixed(2)}
+          <span class="grade-tag">${escapeHtml(detectedGrade.label)}</span>
+        `;
+        return;
+      }
+    }
+    // Fallback: show all-listings stats
+    const s = computeStats(allListings);
+    target.innerHTML = `
+      <strong>${s.symbol}${s.lowest.toFixed(2)}+</strong>
+      <span style="color:var(--text-dim);font-weight:400"> · avg ${s.symbol}${s.average.toFixed(2)} · ${s.count}</span>
+    `;
+  } catch {
+    target.innerHTML = '<span class="loading-dots">error</span>';
+  }
 }
 
 // =====================
