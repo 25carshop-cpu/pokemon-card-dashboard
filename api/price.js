@@ -5,13 +5,14 @@ let expansionMapCache = null;
 let expansionMapCacheAt = 0;
 const blueprintCache = new Map();
 
-async function ctFetch(path, token) {
+async function ctFetch(path, token, { allow404 = false } = {}) {
   const res = await fetch(`${CT_BASE}${path}`, {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Accept': 'application/json'
     }
   });
+  if (res.status === 404 && allow404) return null;
   if (!res.ok) {
     const body = await res.text();
     const err = new Error(`CardTrader ${res.status}: ${body.slice(0, 300)}`);
@@ -113,11 +114,13 @@ export default async function handler(req, res) {
       });
     }
 
-    const blueprintIds = matched.map(b => b.id).slice(0, 5);
-    const idsParam = blueprintIds.join(',');
-    const market = await ctFetch(`/marketplace/products?blueprint_ids=${idsParam}`, token);
+    const top = matched.slice(0, 5);
+    const marketResponses = await Promise.all(
+      top.map(bp => ctFetch(`/marketplace/products?blueprint_id=${bp.id}`, token, { allow404: true }))
+    );
 
-    const result = matched.map(bp => {
+    const result = top.map((bp, i) => {
+      const market = marketResponses[i] || {};
       const listings = (market[String(bp.id)] || []).filter(l =>
         l.properties_hash?.pokemon_language === 'jp'
       );
