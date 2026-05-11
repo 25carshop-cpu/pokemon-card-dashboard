@@ -1155,7 +1155,13 @@
 <div id="collectionView" style="display:none">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
     <h2 style="font-size:18px;font-weight:700">📒 My Collection</h2>
-    <button type="button" class="scan-btn" id="openScanBtn">📷 Scan Card to Add</button>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <label style="display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim);cursor:pointer;user-select:none">
+        <input type="checkbox" class="psa-bgs-toggle" data-scope="collection">
+        Show PSA + BGS only
+      </label>
+      <button type="button" class="scan-btn" id="openScanBtn">📷 Scan Card to Add</button>
+    </div>
   </div>
   <div class="collection-stats" id="collectionStats"></div>
   <div class="collection-table-wrap" id="collectionTableWrap">
@@ -1173,6 +1179,10 @@
       <h2 style="font-size:18px;font-weight:700">📊 Graded Watchlist</h2>
       <p style="font-size:12px;color:var(--text-dim);margin-top:2px">Track PSA 9–10 + BGS 9.5–10 prices for both EN and JP markets</p>
     </div>
+    <label style="display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim);cursor:pointer;user-select:none">
+      <input type="checkbox" class="psa-bgs-toggle" data-scope="watchlist">
+      Show PSA + BGS only
+    </label>
   </div>
   <div id="watchlistContainer">
     <div class="empty-state">
@@ -1387,7 +1397,19 @@ let state = {
   expandedFacets: new Set(['supertype']), // facets that are open
   cardViewMode: 'grid',     // 'grid' | 'list' | 'table'
   cardDetailsLoading: false,
+  psaBgsOnly: false,        // when true, Collection + Watchlist show only PSA/BGS-graded entries
 };
+
+const PSA_BGS_ONLY_KEY = 'psaBgsOnly:v1';
+function loadPsaBgsOnly() {
+  try { return localStorage.getItem(PSA_BGS_ONLY_KEY) === '1'; } catch { return false; }
+}
+function savePsaBgsOnly() {
+  try { localStorage.setItem(PSA_BGS_ONLY_KEY, state.psaBgsOnly ? '1' : '0'); } catch {}
+}
+function isPsaBgsGrade(grade) {
+  return /^(PSA|BGS)\b/i.test(grade || '');
+}
 
 // Order + label of facets (matches the screenshot)
 const FACET_DEFS = [
@@ -1764,17 +1786,31 @@ function renderExpansionList() {
     return;
   }
 
-  // Group by series — only show series that are checked in the filter
-  const groups = ALL_SERIES_CATALOG
+  // Sets to promote as their own series-level group (matched by name, case-insensitive)
+  const PROMOTED_SET_NAMES = ['Ninja Spinner', 'Nihil Zero', 'MEGA Dream ex'];
+  const promotedKeys = new Set(PROMOTED_SET_NAMES.map(n => n.trim().toLowerCase()));
+  const setKey = e => (e.name || '').trim().toLowerCase();
+
+  const promotedGroups = PROMOTED_SET_NAMES
+    .map(name => {
+      const set = filtered.find(e => setKey(e) === name.trim().toLowerCase());
+      return set ? { id: `__promo:${name}`, label: name, sets: [set] } : null;
+    })
+    .filter(Boolean);
+
+  // Group by series — only show series that are checked in the filter (exclude promoted sets)
+  const seriesGroups = ALL_SERIES_CATALOG
     .filter(s => state.selectedSeries.has(s.id))
     .map(s => ({
       id: s.id,
       label: s.label,
       sets: filtered
-        .filter(e => e.serieId === s.id)
+        .filter(e => e.serieId === s.id && !promotedKeys.has(setKey(e)))
         .sort((a, b) => String(b.releaseDate || '').localeCompare(String(a.releaseDate || ''))),
     }))
     .filter(g => g.sets.length > 0);
+
+  const groups = [...promotedGroups, ...seriesGroups];
 
   if (groups.length === 0) {
     $('#expansionList').innerHTML = '<div class="empty-state"><div class="icon">☝️</div><h3>Select a series</h3><p>Check one or more series in the filter above</p></div>';
@@ -2485,6 +2521,18 @@ async function renderCollection() {
     return;
   }
 
+  if (state.psaBgsOnly && !state.collection.some(c => isPsaBgsGrade(c.targetGrade))) {
+    $('#collectionStats').innerHTML = '';
+    $('#collectionTableWrap').innerHTML = `
+      <div class="empty-state">
+        <div class="icon">🔍</div>
+        <h3>No PSA / BGS entries</h3>
+        <p>Filter is on (PSA + BGS only). Turn it off to see Raw or other graded cards.</p>
+      </div>
+    `;
+    return;
+  }
+
   // Render skeleton with loading rows first
   renderCollectionTable(true);
 
@@ -2497,14 +2545,17 @@ async function renderCollection() {
 }
 
 function renderCollectionStatsPanel() {
-  const totalQty = state.collection.reduce((s, c) => s + (c.qty || 0), 0);
+  const visible = state.psaBgsOnly
+    ? state.collection.filter(c => isPsaBgsGrade(c.targetGrade))
+    : state.collection;
+  const totalQty = visible.reduce((s, c) => s + (c.qty || 0), 0);
   let totalCurrent = 0;
   let totalCost = 0;
   let pricedCount = 0;
   let currency = 'USD';
   let symbol = '$';
 
-  for (const item of state.collection) {
+  for (const item of visible) {
     const p = state.collectionPrices[item.id + ':' + item.targetGrade];
     if (p?.stats) {
       const px = p.stats.average || p.stats.lowest || 0;
@@ -2520,14 +2571,14 @@ function renderCollectionStatsPanel() {
 
   $('#collectionStats').innerHTML = `
     <div class="stat">
-      <div class="stat-label">Total Cards</div>
+      <div class="stat-label">Total Cards${state.psaBgsOnly ? ' <span style="font-size:10px;color:var(--accent)">· PSA+BGS</span>' : ''}</div>
       <div class="stat-value">${totalQty}</div>
-      <div class="stat-meta">${state.collection.length} unique entries</div>
+      <div class="stat-meta">${visible.length} unique entries</div>
     </div>
     <div class="stat">
       <div class="stat-label">Market Value (avg)</div>
       <div class="stat-value">${symbol}${totalCurrent.toFixed(2)}</div>
-      <div class="stat-meta">${pricedCount}/${state.collection.length} priced · ${currency}</div>
+      <div class="stat-meta">${pricedCount}/${visible.length} priced · ${currency}</div>
     </div>
     <div class="stat">
       <div class="stat-label">Purchase Cost</div>
@@ -2544,6 +2595,7 @@ function renderCollectionStatsPanel() {
 
 function renderCollectionTable(loading) {
   const rows = state.collection.map((item, idx) => {
+    if (state.psaBgsOnly && !isPsaBgsGrade(item.targetGrade)) return '';
     const p = state.collectionPrices[item.id + ':' + item.targetGrade];
     const stats = p?.stats;
     const priceCell = loading
@@ -2814,7 +2866,10 @@ function renderWatchlistCard(item, idx, prices) {
   });
   const noDataYet = prices && !hasAnyData;
 
-  const priceCells = WATCHLIST_GRADES.map(grade => {
+  const visibleGrades = state.psaBgsOnly
+    ? WATCHLIST_GRADES.filter(g => g !== 'Any')
+    : WATCHLIST_GRADES;
+  const priceCells = visibleGrades.map(grade => {
     const cells = WATCHLIST_LANGS.map(lang => {
       if (!prices) return `<td class="price-cell"><span class="loader">…</span></td>`;
       const json = prices[lang.code];
@@ -3558,6 +3613,21 @@ state.collection = loadCollection();
 updateCollectionTabBadge();
 state.watchlist = loadWatchlist();
 updateWatchlistTabBadge();
+
+// Restore + wire PSA/BGS-only filter toggle
+state.psaBgsOnly = loadPsaBgsOnly();
+document.querySelectorAll('.psa-bgs-toggle').forEach(cb => {
+  cb.checked = state.psaBgsOnly;
+  cb.addEventListener('change', () => {
+    state.psaBgsOnly = cb.checked;
+    savePsaBgsOnly();
+    document.querySelectorAll('.psa-bgs-toggle').forEach(other => {
+      if (other !== cb) other.checked = state.psaBgsOnly;
+    });
+    if (state.view === 'collection') renderCollection();
+    if (state.view === 'watchlist') renderWatchlist();
+  });
+});
 
 init();
 </script>
