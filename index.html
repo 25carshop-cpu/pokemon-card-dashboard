@@ -2570,11 +2570,11 @@ async function runScan() {
   try {
     await ensureTesseract();
 
-    const result = await Tesseract.recognize(scanState.imageDataUrl, 'eng', {
+    const result = await Tesseract.recognize(scanState.imageDataUrl, 'eng+jpn', {
       logger: m => {
         let label = '';
         if (m.status === 'recognizing text') {
-          label = `OCR running... ${Math.round((m.progress || 0) * 100)}%`;
+          label = `OCR running (eng+jpn)... ${Math.round((m.progress || 0) * 100)}%`;
         } else if (m.status) {
           label = `${m.status}${m.progress != null ? ' ' + Math.round(m.progress * 100) + '%' : ''}...`;
         }
@@ -2587,20 +2587,80 @@ async function runScan() {
     const fullText = result?.data?.text || '';
     const words = (result?.data?.words || []).map(w => w.text).filter(Boolean);
 
+    const detected = parseCardFromOcr(fullText);
     const candidates = extractNameCandidates(fullText, words);
-    const detectedGrade = detectGradeFromOcr(fullText);
+    if (detected.name && !candidates.includes(detected.name)) candidates.unshift(detected.name);
+
     $('#scanStatus').innerHTML = `
-      <div>Found ${candidates.length} candidate name(s). Searching TCGdex + fetching prices...</div>
+      <div>Detected card info. Searching TCGdex + fetching prices...</div>
       <div class="scan-text-box">${escapeHtml(fullText.slice(0, 400))}${fullText.length > 400 ? '...' : ''}</div>
     `;
 
-    const matches = await searchMatchingCards(candidates);
-    renderScanResults(matches, candidates, detectedGrade);
+    const matches = await searchMatchingCards(candidates, detected);
+    renderScanResults(matches, candidates, detected);
   } catch (err) {
     $('#scanStatus').innerHTML = `<span style="color:var(--red)">OCR failed: ${escapeHtml(err.message)}</span>`;
   } finally {
     $('#scanRunBtn').disabled = false;
   }
+}
+
+function parseCardFromOcr(text) {
+  const out = { name: null, setCode: null, cardNumber: null, totalCount: null, grade: null, certNumber: null, year: null, isJp: false };
+  if (!text) return out;
+  const flat = text.replace(/\s+/g, ' ').trim();
+
+  // Set code: matches SVxx/SVxxL (with optional letter suffix like SV5M, SV6A)
+  // Also captures bare letter codes "SVM", "SVF", "SVK" that PSA labels use
+  const setMatches = [...flat.matchAll(/\bSV\d*[A-Z]?\b/gi)].map(m => m[0].toUpperCase());
+  if (setMatches.length) {
+    // Prefer the most specific (longest)
+    out.setCode = setMatches.sort((a, b) => b.length - a.length)[0].toLowerCase();
+  }
+
+  // Card number "NNN/MMM"
+  const numMatch = flat.match(/(\d{1,3})\s*\/\s*(\d{1,3})/);
+  if (numMatch) {
+    out.cardNumber = numMatch[1].padStart(3, '0');
+    out.totalCount = numMatch[2];
+  } else {
+    // Or "#NNN"
+    const hashMatch = flat.match(/#\s*(\d{1,3})\b/);
+    if (hashMatch) out.cardNumber = hashMatch[1].padStart(3, '0');
+  }
+
+  // Year "20xx"
+  const yearMatch = flat.match(/\b(20\d{2})\b/);
+  if (yearMatch) out.year = yearMatch[1];
+
+  // Grade
+  out.grade = detectGradeFromOcr(text);
+
+  // PSA cert number — usually 8-9 digit number
+  // Look near "PSA" or as standalone large number
+  const certPatterns = [/PSA[^\d]*(\d{8,9})/i, /\b(\d{9})\b/, /\b(\d{8})\b/];
+  for (const p of certPatterns) {
+    const m = flat.match(p);
+    if (m) { out.certNumber = m[1]; break; }
+  }
+
+  // Extract a probable Pokemon name (longest line of mostly letters, near top)
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  for (const line of lines.slice(0, 12)) {
+    // Skip lines that are mostly numbers/symbols
+    const cleaned = line.replace(/[^\p{L}\s'-]/gu, ' ').replace(/\s+/g, ' ').trim();
+    if (cleaned.length >= 4 && /^[A-Z]/.test(cleaned)) {
+      const lc = cleaned.toLowerCase();
+      if (STOPWORDS.has(lc) || /^(pokemon|trainer|energy|gem|mint|psa|bgs|cgc)$/i.test(lc)) continue;
+      out.name = cleaned;
+      break;
+    }
+  }
+
+  // Detect JP card by looking for hiragana/katakana/kanji
+  out.isJp = /[぀-ヿ㐀-鿿]/.test(text) || /\bJP\b/.test(flat);
+
+  return out;
 }
 
 function detectGradeFromOcr(text) {
@@ -2649,9 +2709,39 @@ function extractNameCandidates(fullText, words) {
   return [...candidates].sort((a, b) => b.length - a.length).slice(0, 8);
 }
 
-async function searchMatchingCards(candidates) {
+async function searchMatchingCards(candidates, detected) {
   const seen = new Map();
+
+  // Strategy 1: Direct lookup by set+number (most reliable when both detected)
+  if (detected?.setCode && detected?.cardNumber) {
+    const setVariants = [
+      detected.setCode,                          // sv5m
+      detected.setCode.replace(/^sv/i, 'sv0'),   // sv05m (some EN sets are zero-padded)
+    ];
+    const numVariants = [
+      detected.cardNumber,                              // 023
+      detected.cardNumber.replace(/^0+/, '') || '0',    // 23
+    ];
+    const langs = [API_BASE, 'https://api.tcgdex.net/v2/ja', 'https://api.tcgdex.net/v2/en'];
+    for (const lang of langs) {
+      for (const set of setVariants) {
+        for (const num of numVariants) {
+          try {
+            const r = await fetch(`${lang}/cards/${set}-${num}`);
+            if (r.ok) {
+              const card = await r.json();
+              if (card?.id) seen.set(card.id, card);
+            }
+          } catch {}
+        }
+      }
+      if (seen.size > 0) break; // found in this language, stop trying others
+    }
+  }
+
+  // Strategy 2: Name-based search (fallback / additional results)
   for (const name of candidates) {
+    if (!name || name.length < 3) continue;
     try {
       const url = `${API_BASE}/cards?name=like:${encodeURIComponent(name)}`;
       const res = await fetch(url);
@@ -2660,37 +2750,162 @@ async function searchMatchingCards(candidates) {
       for (const c of (data || []).slice(0, 12)) {
         if (!seen.has(c.id)) seen.set(c.id, c);
       }
-      if (seen.size >= 24) break; // enough results
+      if (seen.size >= 24) break;
     } catch {}
   }
   return [...seen.values()].slice(0, 24);
 }
 
-function renderScanResults(matches, candidates, detectedGrade) {
-  if (matches.length === 0) {
-    $('#scanResults').innerHTML = `
-      <h4>No matches</h4>
-      <p style="color:var(--text-dim);font-size:12px">
-        OCR couldn't match a card name. Try a clearer photo (less glare, straight angle, good lighting).
-      </p>
-      <p style="color:var(--text-dim);font-size:11px;margin-top:6px">
-        Tried: ${candidates.slice(0, 5).map(c => `<code style="background:var(--bg-dark);padding:1px 6px;border-radius:3px">${escapeHtml(c)}</code>`).join(' ')}
-      </p>
-    `;
-    return;
+function buildMarketplaceLinks(detected) {
+  const name = detected?.name || '';
+  const num = detected?.cardNumber || '';
+  const setCode = (detected?.setCode || '').toUpperCase();
+  const grade = detected?.grade?.label || '';
+  const cert = detected?.certNumber || '';
+  const isJp = detected?.isJp;
+
+  // Build search queries
+  const enQuery = [name, setCode, num, grade].filter(Boolean).join(' ').trim();
+  const jpQuery = ['ポケモンカード', name, num].filter(Boolean).join(' ').trim();
+
+  const links = [
+    {
+      icon: '🛒',
+      label: 'eBay (Sold listings)',
+      desc: 'Worldwide actual sale prices',
+      url: `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent('Pokemon ' + enQuery)}&LH_Sold=1&LH_Complete=1`,
+    },
+    {
+      icon: '🛒',
+      label: 'eBay (Active)',
+      desc: 'Current asking prices',
+      url: `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent('Pokemon ' + enQuery)}`,
+    },
+    {
+      icon: '🇯🇵',
+      label: 'Yahoo Auctions JP',
+      desc: 'Japanese auction market',
+      url: `https://auctions.yahoo.co.jp/search/search?p=${encodeURIComponent(jpQuery)}`,
+    },
+    {
+      icon: '🇯🇵',
+      label: 'Mercari JP',
+      desc: 'Japanese resell platform',
+      url: `https://jp.mercari.com/search?keyword=${encodeURIComponent(jpQuery)}`,
+    },
+    {
+      icon: '🇯🇵',
+      label: 'Yuyutei (遊々亭)',
+      desc: 'Largest JP card store',
+      url: `https://yuyu-tei.jp/sell/poc/s/search?word=${encodeURIComponent(name || jpQuery)}`,
+    },
+    {
+      icon: '🇯🇵',
+      label: 'Cardrush',
+      desc: 'JP retail prices',
+      url: `https://www.cardrush-pokemon.jp/products/list?name=${encodeURIComponent(name)}`,
+    },
+    {
+      icon: '🇺🇸',
+      label: 'TCGplayer',
+      desc: 'US market (mostly EN cards)',
+      url: `https://www.tcgplayer.com/search/pokemon/all?q=${encodeURIComponent(enQuery)}`,
+    },
+    {
+      icon: '📊',
+      label: 'PriceCharting',
+      desc: 'Historical price data',
+      url: `https://www.pricecharting.com/search-products?q=${encodeURIComponent(enQuery)}&type=prices`,
+    },
+  ];
+  if (cert) {
+    links.unshift({
+      icon: '🔒',
+      label: `PSA Cert #${cert}`,
+      desc: 'Verify grade + pop report + sales',
+      url: `https://www.psacard.com/cert/${encodeURIComponent(cert)}`,
+    });
   }
+  return links;
+}
+
+function renderDetectedInfo(detected) {
+  const items = [];
+  if (detected.name) items.push(`<strong>${escapeHtml(detected.name)}</strong>`);
+  if (detected.setCode) items.push(`Set: <code style="background:var(--bg-dark);padding:1px 6px;border-radius:3px">${escapeHtml(detected.setCode.toUpperCase())}</code>`);
+  if (detected.cardNumber) items.push(`#${escapeHtml(detected.cardNumber)}${detected.totalCount ? '/' + escapeHtml(detected.totalCount) : ''}`);
+  if (detected.year) items.push(`Year ${escapeHtml(detected.year)}`);
+  if (detected.isJp) items.push(`<span style="color:var(--accent-2)">🇯🇵 Japanese</span>`);
+  if (detected.certNumber) items.push(`Cert #<code style="background:var(--bg-dark);padding:1px 6px;border-radius:3px">${escapeHtml(detected.certNumber)}</code>`);
+  if (items.length === 0) return '';
+  return `
+    <div style="background:var(--bg-card-2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin:12px 0;font-size:13px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+      <span style="color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:1px">📋 Detected</span>
+      ${items.join('<span style="color:var(--text-dim)">·</span>')}
+    </div>
+  `;
+}
+
+function renderMarketplaceLinks(detected) {
+  const links = buildMarketplaceLinks(detected);
+  return `
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+      <h4 style="font-size:13px;color:var(--accent);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">🌍 Check prices in other markets</h4>
+      <p style="color:var(--text-dim);font-size:11px;margin-bottom:10px">Click to search this card on each marketplace (opens new tab). Useful when CardTrader has no listings — especially for JP-exclusive cards.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
+        ${links.map(l => `
+          <a href="${escapeHtml(l.url)}" target="_blank" rel="noopener" style="
+            display:flex;align-items:center;gap:10px;padding:10px 12px;
+            background:var(--bg-card-2);border:1px solid var(--border);border-radius:8px;
+            text-decoration:none;color:var(--text);transition:all .12s ease
+          " onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+            <span style="font-size:18px">${l.icon}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:700">${escapeHtml(l.label)}</div>
+              <div style="font-size:10px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(l.desc)}</div>
+            </div>
+            <span style="color:var(--text-dim);font-size:14px">↗</span>
+          </a>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderScanResults(matches, candidates, detected) {
+  const detectedGrade = detected?.grade || null;
+  const detectedInfo = renderDetectedInfo(detected || {});
+  const marketLinks = renderMarketplaceLinks(detected || {});
 
   const gradeBanner = detectedGrade ? `
     <div class="grade-detected-banner">
       <span>🏆 Detected grade from image:</span>
       <span class="grade-pill-large">${escapeHtml(detectedGrade.label)}</span>
-      <span style="margin-left:auto;font-size:11px;color:var(--text-dim)">prices below show ${escapeHtml(detectedGrade.label)} listings when available</span>
+      <span style="margin-left:auto;font-size:11px;color:var(--text-dim)">prices below prefer ${escapeHtml(detectedGrade.label)} listings when present</span>
     </div>
   ` : '';
 
+  if (matches.length === 0) {
+    $('#scanResults').innerHTML = `
+      ${detectedInfo}
+      ${gradeBanner}
+      <h4 style="margin-top:12px">No matches in TCGdex</h4>
+      <p style="color:var(--text-dim);font-size:12px">
+        Either the card isn't indexed yet (common for newer JP-exclusive sets like Cyber Judge / sv5m)
+        or OCR missed the name. Use the marketplace links below to check prices manually.
+      </p>
+      <p style="color:var(--text-dim);font-size:11px;margin-top:6px">
+        OCR tried: ${candidates.slice(0, 5).map(c => `<code style="background:var(--bg-dark);padding:1px 6px;border-radius:3px">${escapeHtml(c)}</code>`).join(' ')}
+      </p>
+      ${marketLinks}
+    `;
+    return;
+  }
+
   $('#scanResults').innerHTML = `
-    <h4>${matches.length} possible match${matches.length > 1 ? 'es' : ''}</h4>
+    ${detectedInfo}
     ${gradeBanner}
+    <h4>${matches.length} possible match${matches.length > 1 ? 'es' : ''}</h4>
     <p style="color:var(--text-dim);font-size:11px;margin-bottom:10px">Live prices from CardTrader. Click a card to add to collection.</p>
     <div class="scan-result-grid">
       ${matches.map(c => {
@@ -2705,6 +2920,7 @@ function renderScanResults(matches, candidates, detectedGrade) {
         `;
       }).join('')}
     </div>
+    ${marketLinks}
   `;
   $('#scanResults').querySelectorAll('.scan-result').forEach(el => {
     el.addEventListener('click', () => {
